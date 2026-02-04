@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://eb3ixgggg8hr"]
+
+[node name="Control" type="Control" unique_id=2049841950]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="StartButton" type="Button" parent="." unique_id=754969556]
+layout_mode = 0
+offset_left = 532.0
+offset_top = 282.0
+offset_right = 640.0
+offset_bottom = 330.0
+text = "开始游戏"
+
+[node name="LoadButton" type="Button" parent="." unique_id=1443060154]
+layout_mode = 0
+offset_left = 528.0
+offset_top = 376.0
+offset_right = 641.0
+offset_bottom = 423.0
+text = "加载存档"
+
+[node name="QuitButton" type="Button" parent="." unique_id=2106299348]
+layout_mode = 0
+offset_left = 531.0
+offset_top = 470.0
+offset_right = 637.0
+offset_bottom = 521.0
+text = "退出游戏"

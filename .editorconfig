@@ -1,0 +1,53 @@
+root = true
+
+[*]
+charset = utf-8
+
+# Godot特定文件
+.godot/
+export_presets.cfg
+export.cfg
+.mono/
+data/
+
+# 导入和临时文件
+*.import
+*.translation
+*.remap
+*.gen.*
+
+# 日志和缓存
+logs/
+*.log
+.cache/
+
+# C# 特定文件
+bin/
+obj/
+*.csproj.user
+*.csproj.bak
+
+# IDE相关文件
+.vscode/
+.idea/
+*.sln
+*.suo
+*.userprefs
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 备份文件
+*.bak
+*.backup
+*.tmp
+*.swp
+
+# 自动生成文件
+# 注意：以下文件应该保留，不要忽略：
+# project.godot - 项目配置文件
+# *.tscn - 场景文件
+# *.cs - C#脚本文件
+# *.csproj - C#项目文件

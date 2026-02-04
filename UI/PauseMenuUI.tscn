@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://ip0tyccwwnhi"]
+
+[node name="Control" type="Control" unique_id=20742503]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="ResumeButton" type="Button" parent="." unique_id=1318814851]
+layout_mode = 0
+offset_left = 526.0
+offset_top = 189.0
+offset_right = 676.0
+offset_bottom = 245.0
+text = "回到游戏"
+
+[node name="MainMenuButton" type="Button" parent="." unique_id=1124875473]
+layout_mode = 0
+offset_left = 523.0
+offset_top = 286.0
+offset_right = 672.0
+offset_bottom = 343.0
+text = "主菜单"
