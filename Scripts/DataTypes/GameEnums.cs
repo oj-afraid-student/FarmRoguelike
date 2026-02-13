@@ -49,4 +49,12 @@ public static class GameEnums
         ItemReward,
         GoldReward
     }
+
+    // 作物效果类型
+    public enum CropEffectType
+    {
+        StatBoost,      // 属性加成（如提高生命上限）
+        CurseTrade,     // 诅咒权衡（降低速度，提高攻击）
+        Forget          // 遗忘（删除卡牌或属性）
+    }
 }

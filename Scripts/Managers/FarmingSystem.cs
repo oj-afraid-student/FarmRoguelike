@@ -187,6 +187,70 @@ public partial class FarmingSystem : Node
     {
         GD.Print($"作物种植事件: {cropId} 在 {plotIndex}");
     }
+    
+    /// <summary>
+    /// 恢复地块数据（用于加载存档）
+    /// </summary>
+    public void RestorePlots(Dictionary<int, CropPlotSaveData> plotsData, DateTime lastUpdateTime)
+    {
+        if (plotsData == null)
+            return;
+        
+        // 计算离线时间
+        var offlineTime = (DateTime.Now - lastUpdateTime).TotalSeconds;
+        
+        foreach (var plotSave in plotsData.Values)
+        {
+            if (!_plots.ContainsKey(plotSave.Index))
+                continue;
+            
+            var plot = _plots[plotSave.Index];
+            
+            // 恢复地块状态
+            plot.IsOccupied = plotSave.IsOccupied;
+            plot.CropId = plotSave.CropId;
+            plot.PlantTime = plotSave.PlantTime;
+            plot.GrowthProgress = plotSave.GrowthProgress;
+            plot.IsReady = plotSave.IsReady;
+            plot.Stage = plotSave.Stage;
+            
+            // 如果有作物，更新离线生长
+            if (plot.IsOccupied && plot.PlantTime.HasValue && !plot.IsReady)
+            {
+                var cropData = GameRoot.Instance?.DataManager?.GetCrop(plot.CropId);
+                if (cropData != null)
+                {
+                    // 计算离线生长进度
+                    var elapsedTime = (float)(DateTime.Now - plot.PlantTime.Value).TotalSeconds;
+                    plot.GrowthProgress = Mathf.Min(1.0f, elapsedTime / cropData.GrowthTimeSeconds);
+                    
+                    // 更新生长阶段
+                    if (cropData.Stages.Count > 0)
+                    {
+                        var stageIndex = (int)(plot.GrowthProgress * cropData.Stages.Count);
+                        plot.Stage = Mathf.Min(stageIndex, cropData.Stages.Count - 1);
+                    }
+                    
+                    // 检查是否成熟
+                    if (plot.GrowthProgress >= 1.0f)
+                    {
+                        plot.IsReady = true;
+                    }
+                }
+            }
+        }
+        
+        _lastUpdateTime = DateTime.Now;
+        GD.Print($"恢复 {plotsData.Count} 个地块数据，离线时间: {offlineTime:F1}秒");
+    }
+    
+    /// <summary>
+    /// 获取最后更新时间（用于保存）
+    /// </summary>
+    public DateTime GetLastUpdateTime()
+    {
+        return _lastUpdateTime;
+    }
 }
 
 // 数据类
