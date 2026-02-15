@@ -10,6 +10,43 @@ public partial class GameManager : Node
     public int CurrentFloor { get; private set; } = 1;
     public bool IsPaused { get; private set; } = false;
     
+    /// <summary>
+    /// 设置当前层数（用于加载存档）
+    /// </summary>
+    public void SetCurrentFloor(int floor)
+    {
+        CurrentFloor = floor;
+    }
+    
+    /// <summary>
+    /// 恢复玩家数据（用于加载存档）
+    /// </summary>
+    public void RestorePlayerData(PlayerData playerData)
+    {
+        if (playerData == null)
+        {
+            InitializePlayerData();
+            return;
+        }
+        
+        // 直接更新现有PlayerData的属性，而不是替换整个对象
+        PlayerData.MaxHealth = playerData.MaxHealth;
+        PlayerData.CurrentHealth = playerData.CurrentHealth;
+        PlayerData.Attack = playerData.Attack;
+        PlayerData.Defense = playerData.Defense;
+        PlayerData.ActionPoints = playerData.ActionPoints;
+        PlayerData.Speed = playerData.Speed;
+        PlayerData.Luck = playerData.Luck;
+        PlayerData.Gold = playerData.Gold;
+        
+        // 恢复集合类型
+        PlayerData.Deck = new List<string>(playerData.Deck ?? new List<string>());
+        PlayerData.EquippedCards = new List<string>(playerData.EquippedCards ?? new List<string>());
+        PlayerData.Inventory = new Dictionary<string, int>(playerData.Inventory ?? new Dictionary<string, int>());
+        PlayerData.Crops = new Dictionary<int, CropPlotData>(playerData.Crops ?? new Dictionary<int, CropPlotData>());
+        PlayerData.PermanentUpgrades = new Dictionary<string, float>(playerData.PermanentUpgrades ?? new Dictionary<string, float>());
+    }
+    
     // 私有字段
     private DataManager _dataManager;
     
@@ -61,6 +98,8 @@ public partial class GameManager : Node
         eventBus.CropHarvested += OnCropHarvested;
         eventBus.RewardSelected += OnRewardSelected;
         eventBus.StatUpdated += OnStatUpdated;
+        eventBus.CropEffectApplied += OnCropEffectApplied;
+        eventBus.CropEffectRemoved += OnCropEffectRemoved;
     }
     
     // 公共方法
@@ -231,5 +270,161 @@ public partial class GameManager : Node
                 GD.Print($"作物提供属性修改: {modifier.Key} * {modifier.Value}");
             }
         }
+    }
+    
+    /// <summary>
+    /// 应用作物效果（供UI或其他系统调用）
+    /// </summary>
+    public bool ApplyCropEffect(string cropId)
+    {
+        var cropEffectSystem = GameRoot.Instance?.CropEffectSystem;
+        if (cropEffectSystem == null)
+        {
+            GD.PrintErr("CropEffectSystem 未找到");
+            return false;
+        }
+        
+        return cropEffectSystem.ApplyCropEffect(cropId);
+    }
+    
+    /// <summary>
+    /// 移除作物效果
+    /// </summary>
+    public bool RemoveCropEffect(string cropId)
+    {
+        var cropEffectSystem = GameRoot.Instance?.CropEffectSystem;
+        if (cropEffectSystem == null)
+        {
+            GD.PrintErr("CropEffectSystem 未找到");
+            return false;
+        }
+        
+        return cropEffectSystem.RemoveCropEffect(cropId);
+    }
+    
+    /// <summary>
+    /// 获取所有激活的作物效果
+    /// </summary>
+    public List<ActiveCropEffect> GetActiveCropEffects()
+    {
+        var cropEffectSystem = GameRoot.Instance?.CropEffectSystem;
+        if (cropEffectSystem == null)
+        {
+            return new List<ActiveCropEffect>();
+        }
+        
+        return cropEffectSystem.GetActiveEffects();
+    }
+    
+    /// <summary>
+    /// 检查作物效果是否已激活
+    /// </summary>
+    public bool IsCropEffectActive(string cropId)
+    {
+        var cropEffectSystem = GameRoot.Instance?.CropEffectSystem;
+        if (cropEffectSystem == null)
+        {
+            return false;
+        }
+        
+        return cropEffectSystem.IsEffectActive(cropId);
+    }
+    
+    // 作物效果事件处理
+    private void OnCropEffectApplied(string cropId)
+    {
+        GD.Print($"作物效果已应用: {cropId}");
+    }
+    
+    private void OnCropEffectRemoved(string cropId)
+    {
+        GD.Print($"作物效果已移除: {cropId}");
+    }
+    
+    /// <summary>
+    /// 打开末影箱（供UI调用）
+    /// </summary>
+    public EnderChestData OpenEnderChest(int floorNumber)
+    {
+        var enderChestSystem = GameRoot.Instance?.EnderChestSystem;
+        if (enderChestSystem == null)
+        {
+            GD.PrintErr("EnderChestSystem 未找到");
+            return null;
+        }
+        
+        return enderChestSystem.OpenEnderChest(floorNumber);
+    }
+    
+    /// <summary>
+    /// 从末影箱选择作物
+    /// </summary>
+    public bool SelectCropFromEnderChest(string cropId)
+    {
+        var enderChestSystem = GameRoot.Instance?.EnderChestSystem;
+        if (enderChestSystem == null)
+        {
+            GD.PrintErr("EnderChestSystem 未找到");
+            return false;
+        }
+        
+        return enderChestSystem.SelectCrop(cropId);
+    }
+    
+    /// <summary>
+    /// 获取当前末影箱数据
+    /// </summary>
+    public EnderChestData GetCurrentEnderChest()
+    {
+        var enderChestSystem = GameRoot.Instance?.EnderChestSystem;
+        if (enderChestSystem == null)
+        {
+            return null;
+        }
+        
+        return enderChestSystem.CurrentChest;
+    }
+    
+    /// <summary>
+    /// 使用物资到作物
+    /// </summary>
+    public bool UseResourceOnCrop(string resourceId, int plotIndex)
+    {
+        var resourceSystem = GameRoot.Instance?.CombatResourceSystem;
+        if (resourceSystem == null)
+        {
+            GD.PrintErr("CombatResourceSystem 未找到");
+            return false;
+        }
+        
+        return resourceSystem.UseResource(resourceId, plotIndex);
+    }
+    
+    /// <summary>
+    /// 获取玩家物资数量
+    /// </summary>
+    public int GetResourceCount(string resourceId)
+    {
+        var resourceSystem = GameRoot.Instance?.CombatResourceSystem;
+        if (resourceSystem == null)
+        {
+            return 0;
+        }
+        
+        return resourceSystem.GetResourceCount(resourceId);
+    }
+    
+    /// <summary>
+    /// 获取所有玩家物资
+    /// </summary>
+    public Dictionary<string, int> GetPlayerResources()
+    {
+        var resourceSystem = GameRoot.Instance?.CombatResourceSystem;
+        if (resourceSystem == null)
+        {
+            return new Dictionary<string, int>();
+        }
+        
+        return resourceSystem.GetPlayerResources();
     }
 }

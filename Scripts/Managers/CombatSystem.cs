@@ -221,6 +221,7 @@ public partial class CombatSystem : Node2D
 		GD.Print($"敌人 {_currentEnemyId} 被击败！");
 		
 		_eventBus.EmitEnemyDefeated(_currentEnemyId);
+		_eventBus.EmitCombatEnded(true);
 		EmitSignal(SignalName.CombatEnded, true);
 		
 		// 给予玩家奖励

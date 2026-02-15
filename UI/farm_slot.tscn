@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://c8081st8h4a7a"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_apejl"]
+bg_color = Color(0.62166524, 0, 0.14829928, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_oyg3b"]
+bg_color = Color(0.29623672, 0.6255658, 0.3049534, 1)
+
+[node name="FarmSlot" type="Button" unique_id=472246703]
+custom_minimum_size = Vector2(100, 100)
+offset_right = 8.0
+offset_bottom = 8.0
+
+[node name="Soil" type="ColorRect" parent="." unique_id=1027476052]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.3647059, 0.2509804, 0.21568628, 1)
+
+[node name="CropImage" type="ColorRect" parent="." unique_id=1759546508]
+visible = false
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.9843137, 0.7529412, 0.1764706, 1)
+
+[node name="GrowthBar" type="ProgressBar" parent="." unique_id=595407164]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -27.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_apejl")
+theme_override_styles/fill = SubResource("StyleBoxFlat_oyg3b")
+show_percentage = false

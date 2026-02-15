@@ -131,9 +131,30 @@ public class CropData
 {
     public string Id { get; set; }
     public string Name { get; set; }
+    public string Description { get; set; } = ""; // 作物描述
     public float GrowthTimeSeconds { get; set; }
     public CropReward Rewards { get; set; }
 	public List<string> Stages { get; set; } = new();
+    
+    // 作物效果相关
+    public GameEnums.CropEffectType EffectType { get; set; } = GameEnums.CropEffectType.StatBoost;
+    public CropEffectData EffectData { get; set; } // 效果数据
+}
+
+// 作物效果数据
+[Serializable]
+public class CropEffectData
+{
+    // 属性加成效果
+    public Dictionary<string, float> StatBoosts { get; set; } = new(); // 属性名 -> 增加值
+    
+    // 诅咒权衡效果
+    public Dictionary<string, float> CurseModifiers { get; set; } = new(); // 降低的属性
+    public Dictionary<string, float> TradeModifiers { get; set; } = new(); // 提升的属性
+    
+    // 遗忘效果
+    public int CardsToRemove { get; set; } = 0; // 删除卡牌数量
+    public List<string> StatToRemove { get; set; } = new(); // 要移除的属性（暂时不用）
 }
 
 // 作物奖励
