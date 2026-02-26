@@ -10,7 +10,8 @@ public static class GameEnums
         Combat,
         Farming,
         RewardSelection,
-        GameOver
+        GameOver,
+        EnderChest
     }
 
     public enum CardType

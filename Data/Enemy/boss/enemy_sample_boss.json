@@ -1,9 +1,9 @@
 {
   "Id": "enemy_sample_boss",
   "Name": "深渊巨魔",
-  "Health": 350,
+  "Health": 35,
   "Attack": 25,
-  "Defense": 10,
+  "Defense": 5,
   "Abilities": ["cleave_attack", "regeneration"],
   "AiPattern": ["Attack", "Attack", "Defend", "Debuff"],
   "RewardGold": 150,

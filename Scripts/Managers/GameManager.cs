@@ -105,6 +105,7 @@ public partial class GameManager : Node
         eventBus.CropEffectApplied += OnCropEffectApplied;
         eventBus.CropEffectRemoved += OnCropEffectRemoved;
         eventBus.RoomEntered += OnRoomEntered;
+        eventBus.EnderChestOpened += OnEnderChestOpened;
     }
     
     // 公共方法
@@ -138,7 +139,18 @@ public partial class GameManager : Node
             case GameEnums.GameState.Combat:
                 // 战斗初始化
                 break;
+            case GameEnums.GameState.EnderChest:
+                // 末影箱逻辑
+                break;
         }
+    }
+    
+    public void AdvanceToNextFloor()
+    {
+        CurrentFloor++;
+        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
+        ChangeState(GameEnums.GameState.MapExploration);
+        GD.Print($"进入下一层: {CurrentFloor}");
     }
     
     public void TogglePause()
@@ -536,5 +548,10 @@ public partial class GameManager : Node
         }
         
         return resourceSystem.GetPlayerResources();
+    }
+    
+    private void OnEnderChestOpened(EnderChestData chestData)
+    {
+        ChangeState(GameEnums.GameState.EnderChest);
     }
 }

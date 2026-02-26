@@ -191,7 +191,6 @@ public partial class UIManager : Control
 		eventBus.NotificationRequested += OnNotificationRequested;
 		
 		// 末影箱事件
-		eventBus.EnderChestOpened += OnEnderChestOpened;
 		eventBus.CropSelectedFromChest += OnCropSelectedFromChest;
 		
 		// 战斗物资事件
@@ -256,6 +255,17 @@ public partial class UIManager : Control
 				
 			case GameEnums.GameState.GameOver:
 				ShowGameOverUI();
+				break;
+				
+			case GameEnums.GameState.EnderChest:
+				if (_gameManager != null)
+				{
+					var chestData = _gameManager.GetCurrentEnderChest();
+					if (chestData != null)
+					{
+						ShowEnderChestUI(chestData);
+					}
+				}
 				break;
 		}
 		
@@ -386,7 +396,7 @@ public partial class UIManager : Control
 		if (_enderChestUIScene != null)
 		{
 			_currentEnderChestUI = _enderChestUIScene.Instantiate<Control>();
-			AddChild(_currentEnderChestUI);
+			_uiLayer.AddChild(_currentEnderChestUI);
 			
 			// 显示末影箱内容
 			var controller = _currentEnderChestUI as EnderChestUIController;
@@ -1144,11 +1154,6 @@ public partial class UIManager : Control
 		{
 			ShowNotification($"作物效果已激活: {cropData.Name}");
 		}
-	}
-
-	private void OnEnderChestOpened(EnderChestData chestData)
-	{
-		ShowEnderChestUI(chestData);
 	}
 
 	private void OnCropSelectedFromChest(string cropId, float costValue)

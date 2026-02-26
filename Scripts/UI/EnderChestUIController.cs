@@ -101,8 +101,8 @@ public partial class EnderChestUIController : Control
     {
         // 若 Export 未解析到（如场景结构变更后），尝试按路径查找
         var container = _cropsContainer
-            ?? GetNodeOrNull<VBoxContainer>("MainContainer/ScrollContainer/CropsContainer")
-            ?? GetNodeOrNull<VBoxContainer>("MainContainer/PlayerInfo/ScrollContainer/CropsContainer");
+            ?? GetNodeOrNull<VBoxContainer>("CenterContainer/MainContainer/ScrollContainer/CropsContainer")
+            ?? GetNodeOrNull<VBoxContainer>("CenterContainer/MainContainer/PlayerInfo/ScrollContainer/CropsContainer");
         if (container == null || _currentChest == null)
         {
             if (container == null)
@@ -343,7 +343,7 @@ public partial class EnderChestUIController : Control
         // 返回地图
         if (_gameManager != null)
         {
-            _gameManager.ChangeState(GameEnums.GameState.MapExploration);
+            _gameManager.AdvanceToNextFloor();
         }
         
         // 可以选择不销毁，以便下次使用

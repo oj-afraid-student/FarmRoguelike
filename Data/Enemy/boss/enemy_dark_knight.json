@@ -1,9 +1,9 @@
 {
   "Id": "enemy_dark_knight",
   "Name": "暗黑骑士",
-  "Health": 400,
+  "Health": 40,
   "Attack": 30,
-  "Defense": 20,
+  "Defense": 5,
   "Abilities": ["shield_bash", "dark_slash"],
   "AiPattern": ["Attack", "Defend", "Attack", "Debuff", "Attack"],
   "RewardGold": 200,
