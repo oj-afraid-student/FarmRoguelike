@@ -314,6 +314,25 @@ public partial class FarmUIController : Control
         _eventBus.CombatResourcesGenerated += OnCombatResourcesGenerated;
     }
     
+    private void UnsubscribeFromEvents()
+    {
+        if (_eventBus == null)
+            return;
+            
+        _eventBus.CropPlanted -= OnCropPlanted;
+        _eventBus.CropGrowthUpdated -= OnCropGrowthUpdated;
+        _eventBus.CropHarvested -= OnCropHarvested;
+        _eventBus.CropEffectApplied -= OnCropEffectApplied;
+        _eventBus.ResourceAppliedToCrop -= OnResourceAppliedToCrop;
+        _eventBus.CombatResourcesGenerated -= OnCombatResourcesGenerated;
+    }
+    
+    public override void _ExitTree()
+    {
+        base._ExitTree();
+        UnsubscribeFromEvents();
+    }
+    
     // UI事件处理
     private void OnPlotClicked(int plotIndex)
     {

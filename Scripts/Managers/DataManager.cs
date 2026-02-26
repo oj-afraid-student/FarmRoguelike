@@ -6,7 +6,11 @@ using Godot;
 public partial class DataManager : Node
 {
     private Dictionary<string, CardData> _cards = new();
-    private Dictionary<string, EnemyData> _enemies = new();
+    
+    // 敌人数值分开放置和加载
+    private Dictionary<string, EnemyData> _normalEnemies = new();
+    private Dictionary<string, EnemyData> _bossEnemies = new();
+    
     private Dictionary<string, CropData> _crops = new();
     private Dictionary<string, object> _items = new();
     
@@ -34,15 +38,6 @@ public partial class DataManager : Node
             Effects = new Dictionary<string, float> { { "defense", 5 } }
         };
         
-        // 测试敌人数据
-        _enemies["enemy_slime"] = new EnemyData
-        {
-            Id = "enemy_slime",
-            Name = "史莱姆",
-            Health = 30,
-            Attack = 5,
-            Defense = 0
-        };
         
         // 测试作物数据 - 基础作物（无效果）
         _crops["crop_wheat"] = new CropData
@@ -192,7 +187,66 @@ public partial class DataManager : Node
     public override void _Ready()
     {
         InitializeTestData();
-        GD.Print($"数据加载完成: {_cards.Count}卡牌, {_enemies.Count}敌人, {_crops.Count}作物");
+        LoadEnemiesFromDirectory();
+        GD.Print($"数据加载完成: {_cards.Count}卡牌, {_normalEnemies.Count}普通敌人, {_bossEnemies.Count}Boss, {_crops.Count}作物");
+    }
+    
+    private void LoadEnemiesFromDirectory()
+    {
+        // 确保文件夹存在并在真实设备上路径无误
+        string baseDir = ProjectSettings.GlobalizePath("res://Data/Enemy");
+        string normalDir = System.IO.Path.Combine(baseDir, "normal");
+        string bossDir = System.IO.Path.Combine(baseDir, "boss");
+        
+        if (System.IO.Directory.Exists(normalDir))
+        {
+            string[] normalFiles = System.IO.Directory.GetFiles(normalDir, "*.json");
+            foreach (var path in normalFiles)
+            {
+                try
+                {
+                    string jsonString = System.IO.File.ReadAllText(path);
+                    var enemy = JsonSerializer.Deserialize<EnemyData>(jsonString);
+                    if (enemy != null && !string.IsNullOrEmpty(enemy.Id))
+                    {
+                        _normalEnemies[enemy.Id] = enemy;
+                    }
+                }
+                catch (Exception e)
+                {
+                    GD.PrintErr($"加载普通敌人失败: {path}, 错误: {e.Message}");
+                }
+            }
+        }
+        else
+        {
+            GD.PrintErr($"未找到普通敌人配置文件夹: {normalDir}");
+        }
+
+        if (System.IO.Directory.Exists(bossDir))
+        {
+            string[] bossFiles = System.IO.Directory.GetFiles(bossDir, "*.json");
+            foreach (var path in bossFiles)
+            {
+                try
+                {
+                    string jsonString = System.IO.File.ReadAllText(path);
+                    var enemy = JsonSerializer.Deserialize<EnemyData>(jsonString);
+                    if (enemy != null && !string.IsNullOrEmpty(enemy.Id))
+                    {
+                        _bossEnemies[enemy.Id] = enemy;
+                    }
+                }
+                catch (Exception e)
+                {
+                    GD.PrintErr($"加载Boss敌人失败: {path}, 错误: {e.Message}");
+                }
+            }
+        }
+        else
+        {
+            GD.PrintErr($"未找到Boss敌人配置文件夹: {bossDir}");
+        }
     }
     
     // 数据获取方法
@@ -203,7 +257,25 @@ public partial class DataManager : Node
     
     public EnemyData GetEnemy(string id)
     {
-        return _enemies.GetValueOrDefault(id);
+        if (_normalEnemies.ContainsKey(id)) return _normalEnemies[id].Clone();
+        if (_bossEnemies.ContainsKey(id)) return _bossEnemies[id].Clone();
+        return null; // 这里以前返回 _enemies[id]，现在从两个字典查找
+    }
+    
+    public EnemyData GetRandomNormalEnemy()
+    {
+        if (_normalEnemies.Count == 0) return null;
+        var keys = new List<string>(_normalEnemies.Keys);
+        var rand = new Random();
+        return _normalEnemies[keys[rand.Next(keys.Count)]].Clone();
+    }
+
+    public EnemyData GetRandomBossEnemy()
+    {
+        if (_bossEnemies.Count == 0) return null;
+        var keys = new List<string>(_bossEnemies.Keys);
+        var rand = new Random();
+        return _bossEnemies[keys[rand.Next(keys.Count)]].Clone();
     }
     
     public CropData GetCrop(string id)

@@ -13,35 +13,41 @@ public partial class GameRoot : Node
     public FarmingSystem FarmingSystem { get; private set; }
     public EnderChestSystem EnderChestSystem { get; private set; }
     public CombatResourceSystem CombatResourceSystem { get; private set; }
+    public CombatSystem CombatSystem { get; private set; }
+    public MapSystem MapSystem { get; private set; }
     public SaveManager SaveManager { get; private set; }
-    // public AudioManager AudioManager { get; private set; }
 
-    public override void _Ready()
+    // 把所有装载工作提前到 _EnterTree，确保 UI 启动时 100% 能拿到数据！
+    public override void _EnterTree()
     {
         Instance = this;
         
-        // 初始化管理器
-        EventBus = new EventBus();
-        GameManager = new GameManager();
-        DataManager = new DataManager();
+        // 获取 Godot 的全局 Autoload 单例
+        EventBus = GetNode<EventBus>("/root/EventBus");
+        DataManager = GetNode<DataManager>("/root/DataManager");
+        GameManager = GetNode<GameManager>("/root/GameManager");
+        
+        // 动态创建子系统
         CropEffectSystem = new CropEffectSystem();
         FarmingSystem = new FarmingSystem();
         EnderChestSystem = new EnderChestSystem();
         CombatResourceSystem = new CombatResourceSystem();
+        CombatSystem = new CombatSystem();
+        MapSystem = new MapSystem();
         SaveManager = new SaveManager();
-        // AudioManager = new AudioManager();
         
-        // 添加到场景树
-        AddChild(EventBus);
-        AddChild(GameManager);
-        AddChild(DataManager);
+        // 挂载到树上
         AddChild(CropEffectSystem);
         AddChild(FarmingSystem);
         AddChild(EnderChestSystem);
         AddChild(CombatResourceSystem);
+        AddChild(CombatSystem);
+        AddChild(MapSystem);
         AddChild(SaveManager);
-        // AddChild(AudioManager);
-        
-        GD.Print("GameRoot initialized");
+    }
+
+    public override void _Ready()
+    {
+        GD.Print("GameRoot完成，所有系统已就绪");
     }
 }

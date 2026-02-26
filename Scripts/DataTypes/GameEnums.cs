@@ -35,11 +35,9 @@ public static class GameEnums
     public enum RoomType
     {
         Combat,
-        Event,
-        Shop,
-        Rest,
         Boss,
-        Farming
+        Reward,
+        Trap
     }
 
     public enum RewardType

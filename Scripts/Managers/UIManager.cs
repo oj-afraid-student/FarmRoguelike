@@ -24,12 +24,15 @@ public partial class UIManager : Control
 	private Control _currentPauseMenu;
 	private Control _currentEnderChestUI;
 	
+	// 画布层保证渲染在其上
+	private CanvasLayer _uiLayer;
+	
 	// UI元素引用（通过Export在编辑器中设置）
 	[Export] private Label _playerHealthLabel;
 	[Export] private Label _playerGoldLabel;
 	[Export] private Label _floorLabel;
 	[Export] private Label _actionPointsLabel;
-	[Export] private VBoxContainer _handContainer;
+	[Export] private HBoxContainer _handContainer;
 	[Export] private ProgressBar _healthBar;
 	[Export] private Control _notificationPanel;
 	[Export] private Label _notificationLabel;
@@ -51,6 +54,9 @@ public partial class UIManager : Control
 
 	public override void _Ready()
 	{
+		_uiLayer = new CanvasLayer();
+		AddChild(_uiLayer);
+		
 		InitializeManagers();
 		LoadUIScenes();
 		SetupNotificationSystem();
@@ -92,30 +98,30 @@ public partial class UIManager : Control
 	{
 		// 加载UI场景（如果存在）
 		// 注意：这些场景需要您在Godot编辑器中创建
-		if (ResourceLoader.Exists("res://UI/CombatUI.tscn"))
-		{
-			_combatUIScene = GD.Load<PackedScene>("res://UI/CombatUI.tscn");
-		}
+		// 暂时注释掉空场景加载，强制使用代码生成的 DefaultCombatUI 进行测试
+		// if (ResourceLoader.Exists("res://UI/CombatUI.tscn"))
+		// {
+		// 	_combatUIScene = GD.Load<PackedScene>("res://UI/CombatUI.tscn");
+		// }
 		
 		if (ResourceLoader.Exists("res://UI/FarmUI.tscn"))
 		{
 			_farmUIScene = GD.Load<PackedScene>("res://UI/FarmUI.tscn");
 		}
 		
-		if (ResourceLoader.Exists("res://UI/MapUI.tscn"))
-		{
-			_mapUIScene = GD.Load<PackedScene>("res://UI/MapUI.tscn");
-		}
+		// if (ResourceLoader.Exists("res://UI/MapUI.tscn"))
+		// {
+		// 	_mapUIScene = GD.Load<PackedScene>("res://UI/MapUI.tscn");
+		// }
 		
-		if (ResourceLoader.Exists("res://UI/RewardUI.tscn"))
-		{
-			_rewardUIScene = GD.Load<PackedScene>("res://UI/RewardUI.tscn");
-		}
-		
-		if (ResourceLoader.Exists("res://UI/MainMenuUI.tscn"))
-		{
-			_mainMenuScene = GD.Load<PackedScene>("res://UI/MainMenuUI.tscn");
-		}
+		// if (ResourceLoader.Exists("res://UI/RewardUI.tscn"))
+		// {
+		// 	_rewardUIScene = GD.Load<PackedScene>("res://UI/RewardUI.tscn");
+		// }
+		// if (ResourceLoader.Exists("res://UI/MainMenuUI.tscn"))
+		// {
+		// 	_mainMenuScene = GD.Load<PackedScene>("res://UI/MainMenuUI.tscn");
+		// }
 		
 		if (ResourceLoader.Exists("res://UI/GameOverUI.tscn"))
 		{
@@ -182,6 +188,7 @@ public partial class UIManager : Control
 		// 地图事件
 		eventBus.RoomEntered += OnRoomEntered;
 		eventBus.FloorCompleted += OnFloorCompleted;
+		eventBus.NotificationRequested += OnNotificationRequested;
 		
 		// 末影箱事件
 		eventBus.EnderChestOpened += OnEnderChestOpened;
@@ -263,7 +270,7 @@ public partial class UIManager : Control
 		if (_mainMenuScene != null)
 		{
 			_currentMainMenu = _mainMenuScene.Instantiate<Control>();
-			AddChild(_currentMainMenu);
+			_uiLayer.AddChild(_currentMainMenu);
 			
 			// 连接主菜单按钮
 			ConnectMainMenuButtons();
@@ -280,13 +287,15 @@ public partial class UIManager : Control
 		if (_mapUIScene != null)
 		{
 			_currentMapUI = _mapUIScene.Instantiate<Control>();
-			AddChild(_currentMapUI);
+			_uiLayer.AddChild(_currentMapUI);
 		}
 		else
 		{
 			CreateDefaultMapUI();
 		}
 		
+		UpdateMapNavigation();
+		UpdateMapVisuals();
 		ShowNotification("探索地图中...");
 	}
 
@@ -295,7 +304,7 @@ public partial class UIManager : Control
 		if (_combatUIScene != null)
 		{
 			_currentCombatUI = _combatUIScene.Instantiate<Control>();
-			AddChild(_currentCombatUI);
+			_uiLayer.AddChild(_currentCombatUI);
 			
 			// 初始化战斗UI
 			InitializeCombatUI();
@@ -306,6 +315,8 @@ public partial class UIManager : Control
 		}
 		
 		ShowNotification("战斗开始!");
+		UpdateCombatEnemyInfo();
+		UpdateHandCards();
 	}
 
 	private void ShowFarmUI()
@@ -448,6 +459,8 @@ public partial class UIManager : Control
 			cardUI.QueueFree();
 		}
 		_cardUIs.Clear();
+		
+		_handContainer = null;
 	}
 
 	private void UpdateGlobalUI()
@@ -511,13 +524,26 @@ public partial class UIManager : Control
 		container.AddChild(quitButton);
 		
 		_currentMainMenu = container;
-		AddChild(container);
+		_uiLayer.AddChild(container);
 	}
 
 	private void CreateDefaultCombatUI()
 	{
+		var root = new ColorRect();
+		root.Name = "DefaultCombatUI";
+		// 让背景覆盖全屏
+		root.Color = new Color(0, 0, 0, 0.9f); 
+		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		
+		// 提供一个居中的容器
+		var box = new MarginContainer();
+		box.SetAnchorsPreset(Control.LayoutPreset.Center);
+		root.AddChild(box);
+		
 		var container = new VBoxContainer();
-		container.Name = "DefaultCombatUI";
+		container.Name = "CombatLayout";
+		container.Alignment = BoxContainer.AlignmentMode.Center;
+		box.AddChild(container);
 		
 		var enemyInfo = new Label();
 		enemyInfo.Name = "EnemyInfo";
@@ -530,58 +556,109 @@ public partial class UIManager : Control
 		
 		var handContainer = new HBoxContainer();
 		handContainer.Name = "HandContainer";
+		handContainer.Alignment = BoxContainer.AlignmentMode.Center; //居中
+		handContainer.AddThemeConstantOverride("separation", 15);
 		container.AddChild(handContainer);
+		
+		// 将其赋值给全局变量
+		_handContainer = handContainer;
+		
+		// 拉开点距离
+		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 30) });
 		
 		var endTurnButton = new Button();
 		endTurnButton.Text = "结束回合";
 		endTurnButton.Pressed += OnEndTurnButtonPressed;
 		container.AddChild(endTurnButton);
 		
-		_currentCombatUI = container;
-		AddChild(container);
+		_currentCombatUI = root;
+		_uiLayer.AddChild(root);
 	}
 
 	private void CreateDefaultMapUI()
 	{
-		var container = new VBoxContainer();
+		var container = new Control();
 		container.Name = "DefaultMapUI";
+		container.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		
+		var centerBox = new CenterContainer();
+		centerBox.Name = "CenterBox";
+		centerBox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		container.AddChild(centerBox);
+		
+		// 加一个明显的背景底板避免和游戏画面混在一起
+		var bgPanel = new ColorRect();
+		bgPanel.Name = "BgPanel";
+		bgPanel.Color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
+		bgPanel.CustomMinimumSize = new Vector2(500, 450);
+		centerBox.AddChild(bgPanel);
+		
+		var marginBox = new MarginContainer();
+		marginBox.Name = "MarginBox";
+		marginBox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		bgPanel.AddChild(marginBox);
+		
+		var innerContainer = new VBoxContainer();
+		innerContainer.Name = "VBoxContainer";
+		innerContainer.Alignment = BoxContainer.AlignmentMode.Center;
+		marginBox.AddChild(innerContainer);
 		
 		var mapLabel = new Label();
 		mapLabel.Text = "地图探索界面";
 		mapLabel.AddThemeFontSizeOverride("font_size", 24);
-		container.AddChild(mapLabel);
+		mapLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		innerContainer.AddChild(mapLabel);
 		
 		var roomInfo = new Label();
 		roomInfo.Name = "RoomInfo";
 		roomInfo.Text = "当前房间: ???";
-		container.AddChild(roomInfo);
+		roomInfo.HorizontalAlignment = HorizontalAlignment.Center;
+		innerContainer.AddChild(roomInfo);
+		
+		// 加个地图网格容器来可视化地图
+		var mapGrid = new GridContainer();
+		mapGrid.Name = "MapGrid";
+		// mapGrid.Alignment = BoxContainer.AlignmentMode.Center; // GridContainer does not have Alignment
+		mapGrid.SetAnchorsPreset(Control.LayoutPreset.Center);
+		mapGrid.AddThemeConstantOverride("h_separation", 5);
+		mapGrid.AddThemeConstantOverride("v_separation", 5);
+		innerContainer.AddChild(mapGrid);
+		
+		// 拉开点距离
+		innerContainer.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 20) });
 		
 		var moveButtons = new HBoxContainer();
+		moveButtons.Name = "MoveButtons";
+		moveButtons.Alignment = BoxContainer.AlignmentMode.Center;
 		
 		var upButton = new Button();
+		upButton.Name = "UpButton";
 		upButton.Text = "上";
 		upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
 		moveButtons.AddChild(upButton);
 		
 		var leftButton = new Button();
+		leftButton.Name = "LeftButton";
 		leftButton.Text = "左";
 		leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
 		moveButtons.AddChild(leftButton);
 		
 		var rightButton = new Button();
+		rightButton.Name = "RightButton";
 		rightButton.Text = "右";
 		rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
 		moveButtons.AddChild(rightButton);
 		
 		var downButton = new Button();
+		downButton.Name = "DownButton";
 		downButton.Text = "下";
 		downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
 		moveButtons.AddChild(downButton);
 		
-		container.AddChild(moveButtons);
+		innerContainer.AddChild(moveButtons);
 		
 		_currentMapUI = container;
-		AddChild(container);
+		_uiLayer.AddChild(container);
 	}
 
 	private void CreateDefaultFarmUI()
@@ -770,6 +847,9 @@ public partial class UIManager : Control
 	{
 		if (!_isInitialized || _handContainer == null || _gameManager.PlayerData == null) return;
 		
+		var combatSys = GameRoot.Instance?.CombatSystem;
+		if (combatSys == null) return;
+		
 		// 清空现有手牌
 		foreach (var cardUI in _cardUIs)
 		{
@@ -777,13 +857,13 @@ public partial class UIManager : Control
 		}
 		_cardUIs.Clear();
 		
-		// 显示手牌（最多显示5张）
-		var playerData = _gameManager.PlayerData;
-		int cardCount = Math.Min(5, playerData.Deck.Count);
+		// 显示手牌（从战斗系统获取真实的当前手牌）
+		var hand = combatSys.PlayerHand;
+		int cardCount = hand.Count;
 		
 		for (int i = 0; i < cardCount; i++)
 		{
-			var cardId = playerData.Deck[i];
+			var cardId = hand[i];
 			var cardData = _dataManager?.GetCard(cardId);
 			
 			if (cardData != null)
@@ -894,17 +974,30 @@ public partial class UIManager : Control
 	{
 		ShowNotification($"战斗开始! 敌人: {enemyId}");
 		
+		// 战斗开始时我们需要重绘画布（比如手卡数据现在才准备好）
+		UpdateHandCards();
+		
 		// 更新战斗UI中的敌人信息
-		if (_currentCombatUI != null)
+		UpdateCombatEnemyInfo(enemyId);
+	}
+
+	private void UpdateCombatEnemyInfo(string specificEnemyId = null)
+	{
+		if (_currentCombatUI == null) return;
+		
+		var combatSys = GameRoot.Instance?.CombatSystem;
+		if (combatSys == null) return;
+		
+		string enemyId = specificEnemyId ?? combatSys.CurrentEnemyId;
+		if (string.IsNullOrEmpty(enemyId)) return;
+		
+		var enemyInfo = _currentCombatUI.FindChild("EnemyInfo", true, false) as Label;
+		if (enemyInfo != null)
 		{
-			var enemyInfo = _currentCombatUI.GetNode<Label>("EnemyInfo");
-			if (enemyInfo != null)
+			var enemyData = _dataManager?.GetEnemy(enemyId);
+			if (enemyData != null)
 			{
-				var enemyData = _dataManager?.GetEnemy(enemyId);
-				if (enemyData != null)
-				{
-					enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {enemyData.Health})";
-				}
+				enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}";
 			}
 		}
 	}
@@ -934,10 +1027,18 @@ public partial class UIManager : Control
 		// 伤害数字效果
 		if (_currentCombatUI != null)
 		{
-			var enemyInfo = _currentCombatUI.GetNode<Label>("EnemyInfo");
+			var enemyInfo = _currentCombatUI.FindChild("EnemyInfo", true, false) as Label;
 			if (enemyInfo != null)
 			{
 				ShowDamageEffect(damage, enemyInfo.GlobalPosition, true);
+				
+				// 获取战斗系统中的实时血量
+				var enemyData = _dataManager?.GetEnemy(enemyId);
+				var combatSys = GameRoot.Instance?.CombatSystem;
+				if (enemyData != null && combatSys != null)
+				{
+					enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}";
+				}
 			}
 		}
 	}
@@ -951,6 +1052,9 @@ public partial class UIManager : Control
 	{
 		ShowNotification("回合结束");
 		
+		// 重新渲染空手牌
+		UpdateHandCards();
+		
 		// 禁用所有卡牌交互
 		foreach (var cardUI in _cardUIs)
 		{
@@ -961,6 +1065,9 @@ public partial class UIManager : Control
 	private void OnPlayerTurnStarted()
 	{
 		ShowNotification("你的回合");
+		
+		// 渲染新抽的手牌
+		UpdateHandCards();
 		
 		// 启用所有卡牌交互
 		foreach (var cardUI in _cardUIs)
@@ -981,17 +1088,27 @@ public partial class UIManager : Control
 
 	private void OnRoomEntered(RoomData room)
 	{
-		ShowNotification($"进入房间: {room.Type}");
+		// 具体的节点提示现在由 GameManager 负责通过事件分发，或者在这里统一处理
+		// UI不再执行默认的提示以支持自定义的格式
+		// ShowNotification($"进入房间: {room.Type}");
 		
 		// 更新地图UI中的房间信息
 		if (_currentMapUI != null)
 		{
-			var roomInfo = _currentMapUI.GetNode<Label>("RoomInfo");
+			var roomInfo = _currentMapUI.GetNodeOrNull<Label>("CenterBox/BgPanel/MarginBox/VBoxContainer/RoomInfo");
 			if (roomInfo != null)
 			{
 				roomInfo.Text = $"当前房间: {room.Type}";
 			}
+			
+			UpdateMapNavigation();
+			UpdateMapVisuals();
 		}
+	}
+	
+	private void OnNotificationRequested(string message)
+	{
+		ShowNotification(message);
 	}
 
 	private void OnFloorCompleted(int floorNumber)
@@ -1112,15 +1229,178 @@ public partial class UIManager : Control
 
 	private void OnEndTurnButtonPressed()
 	{
-		// 这里应该调用战斗系统的结束回合方法
 		ShowNotification("结束回合");
-		EventBus.Instance?.EmitTurnEnded();
+		
+		// 优先尝试调用CombatSystem的主动结束
+		var combatSystem = GameRoot.Instance?.CombatSystem;
+		if (combatSystem != null)
+		{
+			combatSystem.EndPlayerTurnEarly();
+		}
+		else 
+		{
+			EventBus.Instance?.EmitTurnEnded();
+		}
 	}
 
 	private void OnMoveButtonPressed(Vector2I direction)
 	{
-		ShowNotification($"向 {direction} 移动");
-		// 这里应该调用地图系统的移动方法
+		var mapSystem = GameRoot.Instance?.MapSystem;
+		if (mapSystem == null) return;
+		
+		var currentRoom = mapSystem.CurrentRoom;
+		if (currentRoom == null) return;
+		
+		var newPosition = currentRoom.Position + direction;
+		var availableMoves = mapSystem.GetAvailableMoves();
+		
+		if (availableMoves.Contains(newPosition))
+		{
+			ShowNotification($"向 {direction} 移动");
+			mapSystem.EnterRoom(newPosition);
+		}
+		else
+		{
+			ShowNotification("无法向该方向移动！");
+		}
+	}
+	
+	private void UpdateMapNavigation()
+	{
+		if (_currentMapUI == null) return;
+		var mapSystem = GameRoot.Instance?.MapSystem;
+		if (mapSystem == null) return;
+		
+		var currentRoom = mapSystem.CurrentRoom;
+		if (currentRoom == null) return;
+		
+		var availableMoves = mapSystem.GetAvailableMoves();
+		
+		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/VBoxContainer/MoveButtons");
+		if (moveButtons != null)
+		{
+			var upButton = moveButtons.GetNodeOrNull<Button>("UpButton");
+			var leftButton = moveButtons.GetNodeOrNull<Button>("LeftButton");
+			var rightButton = moveButtons.GetNodeOrNull<Button>("RightButton");
+			var downButton = moveButtons.GetNodeOrNull<Button>("DownButton");
+			
+			if (upButton != null) upButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(0, -1));
+			if (leftButton != null) leftButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(-1, 0));
+			if (rightButton != null) rightButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(1, 0));
+			if (downButton != null) downButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(0, 1));
+		}
+	}
+	
+	private void UpdateMapVisuals()
+	{
+		if (_currentMapUI == null) return;
+		var mapSystem = GameRoot.Instance?.MapSystem;
+		if (mapSystem == null) return;
+		
+		var currentRoom = mapSystem.CurrentRoom;
+		if (currentRoom == null) return;
+		
+		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/MapGrid");
+		if (mapGrid == null) return;
+		
+		// 获取地图尺寸 (通过向底层系统发请求，这里简化为根据当前层数计算出的默认大小，或者通过反射/扩展公开接口)
+		// 为了简单起见，既然层数影响尺寸：3 + Mathf.Min(floor / 3, 2);
+		int baseSize = 3;
+		int extra = Mathf.Min(mapSystem.CurrentFloor / 3, 2);
+		int mapSize = baseSize + extra;
+		
+		mapGrid.Columns = mapSize;
+		
+		// 清理旧节点
+		foreach (Node child in mapGrid.GetChildren())
+		{
+			child.QueueFree();
+		}
+		
+		// 重新生成格子 (GridContainer 的子节点按行依次排列，所以外侧循环 Y，内侧循环 X)
+		for (int y = 0; y < mapSize; y++)
+		{
+			for (int x = 0; x < mapSize; x++)
+			{
+				var pos = new Vector2I(x, y);
+				
+				// 向 MapSystem 查询该点的房间状况
+				var roomDataInfo = mapSystem.GetType().GetMethod("GetRoom", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+				RoomData room = null;
+				if (roomDataInfo != null)
+				{
+					room = (RoomData)roomDataInfo.Invoke(mapSystem, new object[] { pos });
+				}
+				else
+				{
+					// 回退：直接反射字段
+					var mapField = mapSystem.GetType().GetField("_currentFloorMap", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+					if (mapField != null)
+					{
+						var mapData = mapField.GetValue(mapSystem) as List<List<RoomData>>;
+						if (mapData != null && x < mapData.Count && y < mapData[0].Count)
+						{
+							room = mapData[x][y];
+						}
+					}
+				}
+				
+				var cell = new ColorRect();
+				cell.CustomMinimumSize = new Vector2(50, 50);
+				
+				var label = new Label();
+				label.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+				label.HorizontalAlignment = HorizontalAlignment.Center;
+				label.VerticalAlignment = VerticalAlignment.Center;
+				cell.AddChild(label);
+				
+				if (room == null)
+				{
+					// 越界或者无效
+					cell.Color = new Color(0, 0, 0, 0);
+				}
+				else
+				{
+					// 玩家当前所在
+					if (pos == currentRoom.Position)
+					{
+						cell.Color = new Color(0.8f, 0.8f, 0.2f, 1f); // 亮黄色
+						label.Text = "You";
+						label.AddThemeColorOverride("font_color", new Color(0,0,0,1));
+					}
+					// 已访问
+					else if (room.IsVisited)
+					{
+						cell.Color = new Color(0.2f, 0.6f, 0.2f, 1f); // 绿色
+						label.Text = "√";
+					}
+					// 当前节点的相邻可访问节点
+					else if (currentRoom.Connections.Contains(pos))
+					{
+						cell.Color = new Color(0.6f, 0.6f, 0.6f, 1f); // 亮灰色
+						label.Text = "?";
+					}
+					// 未相邻未访问
+					else
+					{
+						cell.Color = new Color(0.3f, 0.3f, 0.3f, 1f); // 暗黑色
+						label.Text = "";
+					}
+					
+					// 如果是BOSS特殊标记
+					if (room.Type == GameEnums.RoomType.Boss)
+					{
+						label.Text = "B";
+						if (pos != currentRoom.Position)
+						{
+						   if (!room.IsVisited) cell.Color = new Color(0.5f, 0.1f, 0.1f, 1f); // 暗红
+						}
+					}
+				}
+				
+				mapGrid.AddChild(cell);
+			}
+		}
 	}
 
 	private void OnPlantButtonPressed(string cropId)
@@ -1181,8 +1461,16 @@ public partial class UIManager : Control
 		// 处理卡牌点击
 		ShowNotification($"点击卡牌: {cardUI.CardData.Name}");
 		
-		// 这里应该调用战斗系统的出牌方法
-		// EventBus.Instance?.EmitCardPlayed(cardUI.CardData.Id, "target");
+		var combatSystem = GameRoot.Instance?.CombatSystem;
+		if (combatSystem != null)
+		{
+			// 假设我们需要targetId可以后续再扩充目标选择逻辑，目前为空
+			combatSystem.PlayCard(cardUI.CardData.Id, "");
+		}
+		else
+		{
+			GD.PrintErr("GameRoot 中未找到 CombatSystem 无法出牌");
+		}
 	}
 
 	#endregion

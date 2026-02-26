@@ -1,62 +1,22 @@
 [gd_scene format=3 uid="uid://cwwl44q3y18be"]
 
-[ext_resource type="Script" uid="uid://sk7p1k13heyl" path="res://Scenes/main.gd" id="1_r150o"]
-[ext_resource type="Script" uid="uid://66enop7itnfc" path="res://Scripts/Managers/CombatResourceSystem.cs" id="2_h1m7h"]
-[ext_resource type="Script" uid="uid://t5735ey8465g" path="res://Scripts/Testing/SystemTestHelper.cs" id="2_idj7w"]
+[ext_resource type="Script" uid="uid://c5pnrsh1c3quh" path="res://Scripts/Main.cs" id="1_2w5on"]
+[ext_resource type="Script" uid="uid://dmpkychlciond" path="res://Scripts/Testing/SystemTestHelper.cs" id="2_idj7w"]
 [ext_resource type="PackedScene" uid="uid://c2k4rcx4is3jb" path="res://UI/FarmUI.tscn" id="2_kln2b"]
-[ext_resource type="Script" uid="uid://c58s4shu3dc32" path="res://Scripts/Managers/CombatSystem.cs" id="3_erwvk"]
-[ext_resource type="Script" uid="uid://duewignnt1myj" path="res://Scripts/Managers/CropEffectSystem.cs" id="4_2w5on"]
-[ext_resource type="Script" uid="uid://hjvh3tngwrfj" path="res://Scripts/Managers/DataManager.cs" id="5_346fj"]
-[ext_resource type="Script" uid="uid://b4ymuuh2y6r1l" path="res://Scripts/Managers/EnderChestSystem.cs" id="6_0sclb"]
-[ext_resource type="Script" uid="uid://c7fxnrv5w25eb" path="res://Scripts/Managers/EventBus.cs" id="7_sxkr1"]
-[ext_resource type="Script" uid="uid://200wo47dpurw" path="res://Scripts/Managers/FarmingSystem.cs" id="8_fq0cl"]
-[ext_resource type="Script" uid="uid://dj6pycovd2jnh" path="res://Scripts/Managers/GameManager.cs" id="9_hwpts"]
 [ext_resource type="Script" uid="uid://0i2orhnlyvib" path="res://Scripts/Managers/GameRoot.cs" id="10_jyqft"]
-[ext_resource type="Script" uid="uid://cie3ish6jgloj" path="res://Scripts/Managers/MapSystem.cs" id="11_3tgeq"]
-[ext_resource type="Script" uid="uid://orfeu666miu5" path="res://Scripts/Managers/SaveManager.cs" id="12_c4ay3"]
 [ext_resource type="Script" uid="uid://ps1un7gbc3ac" path="res://Scripts/Managers/UIManager.cs" id="13_aht7i"]
 [ext_resource type="PackedScene" uid="uid://cgmv2i5eyq6hp" path="res://UI/EnderChestUI.tscn" id="16_erwvk"]
-[ext_resource type="Script" uid="uid://dxorqeqs8ni5g" path="res://Scripts/Testing/EnderChestToHarvestTest.cs" id="17_2w5on"]
+[ext_resource type="Script" uid="uid://cwwlspi8obatb" path="res://Scripts/Testing/EnderChestToHarvestTest.cs" id="17_2w5on"]
 
 [node name="Main" type="Node2D" unique_id=963625589]
-script = ExtResource("1_r150o")
+script = ExtResource("1_2w5on")
 
 [node name="GameRoot" type="Node2D" parent="." unique_id=1696835442]
-
-[node name="CombatResourceSystem" type="Node2D" parent="GameRoot" unique_id=1159943347]
-script = ExtResource("2_h1m7h")
-
-[node name="CombatSystem" type="Node2D" parent="GameRoot" unique_id=1869780292]
-script = ExtResource("3_erwvk")
-
-[node name="CropEffectSystem" type="Node2D" parent="GameRoot" unique_id=356400101]
-script = ExtResource("4_2w5on")
-
-[node name="DataManager" type="Node2D" parent="GameRoot" unique_id=1840308186]
-script = ExtResource("5_346fj")
-
-[node name="EnderChestSystem" type="Node2D" parent="GameRoot" unique_id=1326196416]
-script = ExtResource("6_0sclb")
-
-[node name="EventBus" type="Node2D" parent="GameRoot" unique_id=137426094]
-script = ExtResource("7_sxkr1")
-
-[node name="FarmingSystem" type="Node2D" parent="GameRoot" unique_id=80889554]
-script = ExtResource("8_fq0cl")
-
-[node name="GameManager" type="Node2D" parent="GameRoot" unique_id=128838687]
-script = ExtResource("9_hwpts")
-
-[node name="GameRoot" type="Node2D" parent="GameRoot" unique_id=356953857]
 script = ExtResource("10_jyqft")
 
-[node name="MapSystem" type="Node2D" parent="GameRoot" unique_id=1850283221]
-script = ExtResource("11_3tgeq")
-
-[node name="SaveManager" type="Node2D" parent="GameRoot" unique_id=2113073722]
-script = ExtResource("12_c4ay3")
-
-[node name="UIManager" type="Node2D" parent="GameRoot" unique_id=65498849]
+[node name="UIManager" type="Control" parent="GameRoot" unique_id=479132351]
+layout_mode = 3
+anchors_preset = 0
 script = ExtResource("13_aht7i")
 
 [node name="SystemTestHelper" type="Node2D" parent="." unique_id=1676817074]

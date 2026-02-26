@@ -6,6 +6,13 @@ public partial class Main : Node
     {
         GD.Print("游戏启动...");
         
+        // 删除长驻测试用UI，避免全屏幕遮盖且重复监听事件
+        var farmUI = GetNodeOrNull<Control>("FarmUI");
+        if (farmUI != null) farmUI.QueueFree();
+        
+        var enderChestUI = GetNodeOrNull<Control>("EnderChestUI");
+        if (enderChestUI != null) enderChestUI.QueueFree();
+        
         // 验证所有管理器已加载
         PrintManagersStatus();
         
@@ -47,6 +54,18 @@ public partial class Main : Node
         {
             gameManager.StartNewGame();
             GD.Print("新游戏开始");
+            
+            // 直接进入战斗场景进行测试
+            var testHelper = GetNodeOrNull<SystemTestHelper>("SystemTestHelper");
+            if (testHelper != null)
+            {
+                // 使用CallDeferred确保GameManager等状态完全就绪后再切入战斗
+                testHelper.CallDeferred(nameof(SystemTestHelper.TestCombatScene));
+            }
+            else
+            {
+                GD.PrintErr("未找SystemTestHelper，无法直接进入战斗测试");
+            }
         }
         else
         {

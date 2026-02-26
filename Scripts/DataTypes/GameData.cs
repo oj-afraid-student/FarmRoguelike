@@ -122,7 +122,29 @@ public class EnemyData
     public int Attack { get; set; }
     public int Defense { get; set; }
     public List<string> Abilities { get; set; } = new();
-
+    
+    // 扩展敌人AI与奖励
+    public List<string> AiPattern { get; set; } = new(); // 预设AI行为组 (如："Attack", "Defend", "Debuff")
+    public int RewardGold { get; set; } // 掉落金币
+    public int RewardExp { get; set; }  // 掉落经验
+    public List<string> RewardItems { get; set; } = new(); // 掉落物品（物品ID列表）
+    
+    public EnemyData Clone()
+    {
+        return new EnemyData
+        {
+            Id = this.Id,
+            Name = this.Name,
+            Health = this.Health,
+            Attack = this.Attack,
+            Defense = this.Defense,
+            Abilities = new List<string>(this.Abilities),
+            AiPattern = new List<string>(this.AiPattern),
+            RewardGold = this.RewardGold,
+            RewardExp = this.RewardExp,
+            RewardItems = new List<string>(this.RewardItems)
+        };
+    }
 }
 
 // 作物数据

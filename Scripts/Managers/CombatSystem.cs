@@ -13,10 +13,17 @@ public partial class CombatSystem : Node2D
 	private EventBus _eventBus;
 	private PlayerData _playerData;
 	
+	public string CurrentEnemyId => _currentEnemyId;
+	public int CurrentEnemyHealth => _currentEnemyHealth;
+	public int CurrentEnemyMaxHealth => _currentEnemyMaxHealth;
+	public IReadOnlyList<string> PlayerHand => _playerHand;
+	
 	private string _currentEnemyId;
 	private int _currentEnemyHealth = 100;
 	private int _currentEnemyMaxHealth = 100;
 	private int _currentEnemyAttack = 10;
+	private int _currentEnemyDefense = 0;
+	private int _enemyAiStateIndex = 0;
 	
 	private bool _isPlayerTurn = true;
 	private int _playerActionPoints = 3;
@@ -29,8 +36,8 @@ public partial class CombatSystem : Node2D
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
-		_gameManager = GetNode<GameManager>("/root/GameRoot/GameManager");
-		_eventBus = GetNode<EventBus>("/root/GameRoot/EventBus");
+		_gameManager = GameRoot.Instance?.GameManager;
+		_eventBus = GameRoot.Instance?.EventBus;
 		
 		if (_gameManager != null)
 		{
@@ -57,15 +64,45 @@ public partial class CombatSystem : Node2D
 	
 	public void StartCombat(string enemyId)
 	{
+		if (_gameManager != null)
+		{
+			_playerData = _gameManager.PlayerData;
+		}
+		
 		_currentEnemyId = enemyId;
 		_isPlayerTurn = true;
 		_playerActionPoints = 3;
 		_playerDefenseThisTurn = 0;
+		_enemyAiStateIndex = 0;
 		
-		// 初始化敌人属性（这里简单设置，实际应从数据加载）
-		_currentEnemyHealth = 100;
-		_currentEnemyMaxHealth = 100;
-		_currentEnemyAttack = 10;
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager != null)
+		{
+			var enemyData = dataManager.GetEnemy(enemyId);
+			if (enemyData != null)
+			{
+				_currentEnemyMaxHealth = enemyData.Health;
+				_currentEnemyHealth = enemyData.Health;
+				_currentEnemyAttack = enemyData.Attack;
+				_currentEnemyDefense = enemyData.Defense;
+			}
+			else
+			{
+				GD.PrintErr($"未能找到敌人数据: {enemyId}，使用默认回退数值");
+				_currentEnemyHealth = 100;
+				_currentEnemyMaxHealth = 100;
+				_currentEnemyAttack = 10;
+				_currentEnemyDefense = 0;
+			}
+		}
+		else
+		{
+			GD.PrintErr("未找到 DataManager 节点。使用默认配置。");
+			_currentEnemyHealth = 100;
+			_currentEnemyMaxHealth = 100;
+			_currentEnemyAttack = 10;
+			_currentEnemyDefense = 0;
+		}
 		
 		// 初始化玩家卡组
 		InitializePlayerDeck();
@@ -74,7 +111,6 @@ public partial class CombatSystem : Node2D
 		DrawStartingHand();
 		
 		EmitSignal(SignalName.CombatStarted, enemyId);
-		_eventBus.EmitCombatStarted(enemyId);
 		
 		GD.Print($"战斗开始！敌人: {enemyId}");
 	}
@@ -111,7 +147,7 @@ public partial class CombatSystem : Node2D
 	
 	private void DrawStartingHand()
 	{
-		int cardsToDraw = Math.Min(5, _playerDrawPile.Count);
+		int cardsToDraw = 4;
 		
 		for (int i = 0; i < cardsToDraw; i++)
 		{
@@ -176,35 +212,59 @@ public partial class CombatSystem : Node2D
 	
 	private void ProcessCardEffect(string cardId, string targetId)
 	{
-		// 根据卡牌ID处理不同效果
-		switch (cardId)
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager == null)
 		{
-			case "card_attack_basic":
-				int damage = 8 + (_playerData?.Attack ?? 0);
-				ApplyDamageToEnemy(damage);
-				break;
-				
-			case "card_defend_basic":
-				int defense = 5 + (_playerData?.Defense ?? 0);
-				_playerDefenseThisTurn += defense;
-				GD.Print($"获得 {defense} 点护甲，当前护甲: {_playerDefenseThisTurn}");
-				break;
-				
-			case "card_skill_weakness":
-				// 假设这是削弱敌人攻击的技能
-				_currentEnemyAttack = Math.Max(5, _currentEnemyAttack - 3);
-				GD.Print($"敌人攻击力降低，当前攻击力: {_currentEnemyAttack}");
-				break;
-				
-			default:
-				GD.Print($"未知卡牌效果: {cardId}");
-				break;
+			GD.PrintErr("处理卡牌效果失败：未找到 DataManager");
+			return;
+		}
+
+		var cardData = dataManager.GetCard(cardId);
+		if (cardData == null)
+		{
+			GD.PrintErr($"未能找到卡牌数据: {cardId}");
+			return;
+		}
+
+		if (cardData.Effects == null || cardData.Effects.Count == 0)
+		{
+			GD.Print($"卡牌 {cardData.Name} 没有配置任何效果。");
+			return;
+		}
+
+		foreach (var effect in cardData.Effects)
+		{
+			switch (effect.Key.ToLower())
+			{
+				case "damage":
+					int damage = (int)effect.Value + (_playerData?.Attack ?? 0);
+					ApplyDamageToEnemy(damage);
+					break;
+					
+				case "defense":
+				case "block":
+					int defense = (int)effect.Value + (_playerData?.Defense ?? 0);
+					_playerDefenseThisTurn += defense;
+					GD.Print($"获得 {defense} 点护甲，当前护甲: {_playerDefenseThisTurn}");
+					break;
+					
+				case "weakness":
+					int weakAmount = (int)effect.Value;
+					_currentEnemyAttack = Math.Max(0, _currentEnemyAttack - weakAmount);
+					GD.Print($"敌人攻击力降低了 {weakAmount}点，当前攻击力: {_currentEnemyAttack}");
+					break;
+					
+				default:
+					GD.Print($"未处理的卡牌效果键名: {effect.Key}");
+					break;
+			}
 		}
 	}
 	
 	private void ApplyDamageToEnemy(int damage)
 	{
-		_currentEnemyHealth -= damage;
+		int actualDamage = Math.Max(1, damage - _currentEnemyDefense);
+		_currentEnemyHealth -= actualDamage;
 		
 		if (_currentEnemyHealth <= 0)
 		{
@@ -212,8 +272,8 @@ public partial class CombatSystem : Node2D
 			EnemyDefeated();
 		}
 		
-		_eventBus.EmitEnemyDamaged(_currentEnemyId, damage);
-		GD.Print($"对敌人造成 {damage} 点伤害，敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, actualDamage);
+		GD.Print($"对敌人造成 {actualDamage} 点伤害（包含护甲减免），敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
 	}
 	
 	private void EnemyDefeated()
@@ -230,12 +290,47 @@ public partial class CombatSystem : Node2D
 	
 	private void GiveCombatReward()
 	{
-		// 简单奖励：金币和经验
-		if (_playerData != null)
+		if (_playerData == null) return;
+
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager != null)
 		{
-			int goldReward = 20;
-			_playerData.Gold += goldReward;
-			GD.Print($"获得 {goldReward} 金币");
+			var enemyData = dataManager.GetEnemy(_currentEnemyId);
+			if (enemyData != null)
+			{
+				int goldReward = enemyData.RewardGold;
+				_playerData.Gold += goldReward;
+				
+				GD.Print($"战斗胜利！获得 {goldReward} 金币，{enemyData.RewardExp} 经验。");
+				
+				foreach(var item in enemyData.RewardItems)
+				{
+					GD.Print($"掉落物品: {item}");
+					// 如果Inventory有实现Add接口即可类似处理，暂打印：
+					// if (_playerData.Inventory.ContainsKey(item)) _playerData.Inventory[item]++; 
+					// else _playerData.Inventory[item] = 1;
+				}
+			}
+			else
+			{
+				// 未获取到敌人数据，保底奖励
+				_playerData.Gold += 20;
+				GD.Print("获得 20 金币 (Fallback)");
+			}
+		}
+		else
+		{
+			// GameManager的 fallback
+			_playerData.Gold += 20;
+			GD.Print("获得 20 金币 (Fallback)");
+		}
+	}
+	
+	public void EndPlayerTurnEarly()
+	{
+		if (_isPlayerTurn)
+		{
+			EndPlayerTurn();
 		}
 	}
 	
@@ -244,6 +339,16 @@ public partial class CombatSystem : Node2D
 		_isPlayerTurn = false;
 		_eventBus.EmitTurnEnded();
 		GD.Print("玩家回合结束");
+		
+		// 回合结束，弃掉所有手牌
+		foreach (var card in _playerHand)
+		{
+			_playerDiscardPile.Add(card);
+		}
+		_playerHand.Clear();
+		GD.Print("弃置手牌完毕");
+		// 呼叫一次UI刷新，让结束回合后的手牌消失
+		_eventBus.EmitCardPlayed("", ""); // 借用CardPlayed或者直接写一个UpdateHand的信号，或者直接等待敌人回合结束重新抽牌
 		
 		// 开始敌人回合
 		StartEnemyTurn();
@@ -262,28 +367,74 @@ public partial class CombatSystem : Node2D
 	
 	private void EnemyAttack()
 	{
-		int damage = _currentEnemyAttack;
-		
-		// 应用玩家护甲
-		int actualDamage = Math.Max(0, damage - _playerDefenseThisTurn);
-		
-		if (actualDamage > 0)
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		List<string> aiPattern = null;
+
+		if (dataManager != null)
 		{
-			if (_gameManager != null)
+			var enemyData = dataManager.GetEnemy(_currentEnemyId);
+			if (enemyData != null)
 			{
-				_gameManager.ApplyDamageToPlayer(actualDamage);
-			}
-			else
-			{
-				GD.Print($"敌人对玩家造成 {actualDamage} 点伤害");
+				aiPattern = enemyData.AiPattern;
 			}
 		}
-		else
+
+		if (aiPattern == null || aiPattern.Count == 0)
 		{
-			GD.Print("玩家的护甲完全抵挡了敌人的攻击");
+			// 如果没有AI列表，默认只攻击
+			aiPattern = new List<string> { "Attack" };
 		}
 		
-		// 重置本回合护甲
+		// 重置当前怪物的护甲值(可调整为不每回合重置，由具体游戏设计决定，此处配合防御动作通常只在本回合生效处理)
+		_currentEnemyDefense = 0;
+
+		string currentAction = aiPattern[_enemyAiStateIndex % aiPattern.Count];
+		_enemyAiStateIndex++;
+
+		GD.Print($"敌人执行动作: {currentAction}");
+
+		switch (currentAction.ToLower())
+		{
+			case "attack":
+				int damage = _currentEnemyAttack;
+				// 应用玩家护甲
+				int actualDamage = Math.Max(0, damage - _playerDefenseThisTurn);
+				
+				if (actualDamage > 0)
+				{
+					if (_gameManager != null)
+					{
+						_gameManager.ApplyDamageToPlayer(actualDamage);
+					}
+					else
+					{
+						GD.Print($"敌人对玩家造成 {actualDamage} 点伤害");
+					}
+				}
+				else
+				{
+					GD.Print("玩家的护甲完全抵挡了敌人的攻击");
+				}
+				break;
+			
+			case "defend":
+				// 假设敌防时获得额外防御值
+				_currentEnemyDefense += 5;
+				GD.Print($"敌人采取防御姿态，获得 {_currentEnemyDefense} 点护甲。");
+				break;
+
+			case "debuff":
+				// 对玩家施加减益(这里简化为减少1手牌或直接清空本回合部分护甲状态等)
+				GD.Print("敌人施放减益魔法，干扰玩家。");
+				// 具体debuff可直接抛出事件由 GameManager/Player 处理，例如 _eventBus.EmitPlayerDebuffed()
+				break;
+
+			default:
+				GD.Print($"未知的敌人行动: {currentAction}");
+				break;
+		}
+		
+		// 重置玩家本回合护甲
 		_playerDefenseThisTurn = 0;
 	}
 	
@@ -292,11 +443,14 @@ public partial class CombatSystem : Node2D
 		_isPlayerTurn = true;
 		_playerActionPoints = 3; // 重置行动点
 		
-		// 抽牌
-		DrawCard();
+		// 抽牌 改为每回合抽 4 张
+		for (int i = 0; i < 4; i++)
+		{
+			DrawCard();
+		}
 		
 		_eventBus.EmitPlayerTurnStarted();
-		GD.Print("玩家回合开始，抽1张牌");
+		GD.Print("玩家回合开始，抽4张牌");
 	}
 	
 	public void EndCombat(bool playerWon)
@@ -308,11 +462,8 @@ public partial class CombatSystem : Node2D
 	// 事件处理
 	private void OnCombatStarted(string enemyId)
 	{
-		// 如果这不是当前战斗系统触发的战斗，可以重新初始化
-		if (_currentEnemyId != enemyId)
-		{
-			StartCombat(enemyId);
-		}
+		// 每次进入战斗都必须重新初始化，即使是同一种敌人 (否则上一次归零的血量保留)
+		StartCombat(enemyId);
 	}
 	
 	private void OnCardPlayed(string cardId, string targetId)

@@ -30,6 +30,7 @@ public partial class SystemTestHelper : Node
         GD.Print("- TestCropEffect() - 测试作物效果");
         GD.Print("- TestEnderChest() - 测试末影箱");
         GD.Print("- TestCombatResources() - 测试战斗物资");
+        GD.Print("- TestCombatScene() - 触发验证战斗场景（需切换状态）");
     }
     
     /// <summary>
@@ -262,6 +263,32 @@ public partial class SystemTestHelper : Node
         }
     }
     
+    /// <summary>
+    /// 测试战斗系统与界面 (使用 enemy_sample_boss 数据)
+    /// </summary>
+    public void TestCombatScene()
+    {
+        if (_gameManager == null)
+        {
+            GD.PrintErr("GameManager未初始化");
+            return;
+        }
+
+        var combatSystem = GameRoot.Instance?.CombatSystem;
+        if (combatSystem == null)
+        {
+            GD.PrintErr("系统中未找到CombatSystem实例");
+            return;
+        }
+
+        GD.Print("=== 测试激活战斗场景 ===");
+        _gameManager.ChangeState(GameEnums.GameState.Combat);
+        
+        // 确保使用刚才建的 JSON 样本地数据ID以验证动态属性读取
+        combatSystem.StartCombat("enemy_sample_boss");
+        GD.Print("✓ 已调用StartCombat(\"enemy_sample_boss\")，请在UI上验证手牌与怪物属性");
+    }
+
     /// <summary>
     /// 运行所有测试
     /// </summary>

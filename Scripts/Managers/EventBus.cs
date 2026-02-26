@@ -39,6 +39,7 @@ public partial class EventBus : Node
 	public event Action<RoomData> RoomEntered;
 	public event Action<int> FloorCompleted; // floorNumber
 	public event Action<RewardData> RewardSelected;
+	public event Action<string> NotificationRequested; // message
 	
 	// 末影箱事件
 	public event Action<EnderChestData> EnderChestOpened; // 末影箱打开
@@ -127,6 +128,11 @@ public partial class EventBus : Node
 		RewardSelected?.Invoke(reward);
 	}
 	
+	public void EmitNotificationRequested(string message)
+	{
+		NotificationRequested?.Invoke(message);
+	}
+	
 	public void EmitStatUpdated(GameEnums.PlayerStatType statType, float value)
 	{
 		StatUpdated?.Invoke(statType, value);
@@ -207,27 +213,17 @@ public partial class EventBus : Node
 		throw new NotImplementedException();
 	}
 
-	public void StartEventRoom(RoomData room)
-	{
-		throw new NotImplementedException();
-	}
-
-	public void StartShopRoom(RoomData room)
-	{
-		throw new NotImplementedException();
-	}
-
-	public void StartRestRoom(RoomData room)
-	{
-		throw new NotImplementedException();
-	}
-
 	public void StartBossRoom(RoomData room)
 	{
 		throw new NotImplementedException();
 	}
 
-	public void StartFarmingRoom(RoomData room)
+	public void StartRewardRoom(RoomData room)
+	{
+		throw new NotImplementedException();
+	}
+
+	public void StartTrapRoom(RoomData room)
 	{
 		throw new NotImplementedException();
 	}
