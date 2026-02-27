@@ -16,8 +16,8 @@ public partial class Main : Node
         // 验证所有管理器已加载
         PrintManagersStatus();
         
-        // 启动游戏
-        StartGame();
+        // 游戏将在主菜单通过 UI 按钮启动，结束自动调用
+        // StartGame();
     }
     
     private void PrintManagersStatus()
@@ -47,7 +47,7 @@ public partial class Main : Node
         }
     }
     
-    private void StartGame()
+    public void StartGame()
     {
         var gameManager = GetNode<GameManager>("/root/GameManager");
         if (gameManager != null)

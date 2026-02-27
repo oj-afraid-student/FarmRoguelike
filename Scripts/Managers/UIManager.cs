@@ -43,7 +43,8 @@ public partial class UIManager : Control
 	
 	// UI状态
 	private bool _isInitialized = false;
-	private GameEnums.GameState _lastGameState;
+	// 初始化为非法值以确保首次状态切换生效
+	private GameEnums.GameState _lastGameState = (GameEnums.GameState)(-1);
 	
 	// 卡牌UI缓存
 	private List<CardUI> _cardUIs = new List<CardUI>();
@@ -51,6 +52,18 @@ public partial class UIManager : Control
 	// 通知系统
 	private Timer _notificationTimer;
 	private Queue<string> _notificationQueue = new Queue<string>();
+
+		// --- 农场界面相关字段 (原 FarmUIController 内容合并) ---
+		[Export] private GridContainer _plotsContainer;
+		[Export] private VBoxContainer _cropSelectionContainer;
+		[Export] private VBoxContainer _activeEffectsContainer;
+		[Export] private VBoxContainer _resourcesContainer;
+		[Export] private Button _farmCloseButton;
+		[Export] private Label _farmTitleLabel;
+		[Export] private PackedScene _plotUIScene;
+
+		private Dictionary<int, Control> _plotUIs = new();
+		private int? _selectedPlotIndex = null;
 
 	public override void _Ready()
 	{
@@ -183,6 +196,7 @@ public partial class UIManager : Control
 		// 农场事件
 		eventBus.CropPlanted += OnCropPlanted;
 		eventBus.CropHarvested += OnCropHarvested;
+		eventBus.CropGrowthUpdated += OnCropGrowthUpdated;
 		eventBus.CropEffectApplied += OnCropEffectApplied;
 		
 		// 地图事件
@@ -191,6 +205,7 @@ public partial class UIManager : Control
 		eventBus.NotificationRequested += OnNotificationRequested;
 		
 		// 末影箱事件
+		eventBus.EnderChestOpened += OnEnderChestOpened;
 		eventBus.CropSelectedFromChest += OnCropSelectedFromChest;
 		
 		// 战斗物资事件
@@ -213,8 +228,9 @@ public partial class UIManager : Control
 		UpdatePlayerStats();
 		UpdateFloorInfo();
 		
-		// 根据当前游戏状态显示对应UI
-		OnGameStateChanged(_gameManager.CurrentState);
+		// 根据游戏管理器当前状态显示对应UI，以避免主菜单与其他界面重叠
+		var initialState = _gameManager != null ? _gameManager.CurrentState : GameEnums.GameState.MainMenu;
+		OnGameStateChanged(initialState);
 	}
 
 	#endregion
@@ -256,17 +272,6 @@ public partial class UIManager : Control
 			case GameEnums.GameState.GameOver:
 				ShowGameOverUI();
 				break;
-				
-			case GameEnums.GameState.EnderChest:
-				if (_gameManager != null)
-				{
-					var chestData = _gameManager.GetCurrentEnderChest();
-					if (chestData != null)
-					{
-						ShowEnderChestUI(chestData);
-					}
-				}
-				break;
 		}
 		
 		// 更新全局UI
@@ -301,7 +306,9 @@ public partial class UIManager : Control
 		}
 		else
 		{
+			
 			CreateDefaultMapUI();
+			GD.Print("地图UI场景未加载，显示默认UI");
 		}
 		
 		UpdateMapNavigation();
@@ -334,7 +341,17 @@ public partial class UIManager : Control
 		if (_farmUIScene != null)
 		{
 			_currentFarmUI = _farmUIScene.Instantiate<Control>();
-			AddChild(_currentFarmUI);
+			_uiLayer.AddChild(_currentFarmUI);
+
+			// 如果场景中有关闭按钮，连接其回调到 OnCloseFarmButtonPressed
+			var closeBtn = FindCloseButton(_currentFarmUI);
+			if (closeBtn != null)
+			{
+				closeBtn.Pressed += OnCloseFarmButtonPressed;
+			}
+
+			// 初始化农场UI
+			InitializeFarmPlotUIs();	
 		}
 		else
 		{
@@ -342,6 +359,7 @@ public partial class UIManager : Control
 		}
 		
 		ShowNotification("进入农场");
+		SetupFarmUI();
 	}
 
 	private void ShowRewardUI()
@@ -396,7 +414,7 @@ public partial class UIManager : Control
 		if (_enderChestUIScene != null)
 		{
 			_currentEnderChestUI = _enderChestUIScene.Instantiate<Control>();
-			_uiLayer.AddChild(_currentEnderChestUI);
+			AddChild(_currentEnderChestUI);
 			
 			// 显示末影箱内容
 			var controller = _currentEnderChestUI as EnderChestUIController;
@@ -495,6 +513,359 @@ public partial class UIManager : Control
 			}
 		}
 	}
+
+	#region 农场UI方法
+
+	private void SetupFarmUI()
+	{
+		// 初始化管理器引用在上层已完成
+		InitializeFarmPlotUIs();
+		UpdateAllFarmUI();
+	}
+
+	private void InitializeFarmPlotUIs()
+	{
+		if (_plotsContainer == null) return;
+		// 清除已有
+		foreach (var child in _plotsContainer.GetChildren())
+		{
+			child.QueueFree();
+		}
+		_plotUIs.Clear();
+
+		var plots = GameRoot.Instance?.FarmingSystem?.Plots;
+		if (plots == null) return;
+		foreach (var plot in plots.Values)
+		{
+			CreatePlotUI(plot.Index);
+		}
+	}
+
+	private Button FindCloseButton(Node root)
+	{
+		if (root == null) return null;
+		// 先尝试常见名字
+		var tryNames = new string[] { "CloseButton", "CloseBtn", "Close", "BtnClose", "CloseFarmButton" };
+		foreach (var name in tryNames)
+		{
+			var btn = root.GetNodeOrNull<Button>(name);
+			if (btn != null) return btn;
+		}
+
+		// 递归搜索：找到任意文本为“关闭”或"Close"的 Button
+		foreach (Node child in root.GetChildren())
+		{
+			if (child is Button b)
+			{
+				if (!string.IsNullOrEmpty(b.Text) && (b.Text.Contains("关闭") || b.Text.Equals("Close", StringComparison.OrdinalIgnoreCase)))
+					return b;
+			}
+			else
+			{
+				var found = FindCloseButton(child);
+				if (found != null) return found;
+			}
+		}
+		return null;
+	}
+
+	private void CreatePlotUI(int plotIndex)
+	{
+		var plotContainer = new VBoxContainer();
+		plotContainer.Name = $"Plot_{plotIndex}";
+
+		var plotButton = new Button();
+		plotButton.Text = $"地块 {plotIndex + 1}";
+		plotButton.Pressed += () => OnPlotClicked(plotIndex);
+		plotContainer.AddChild(plotButton);
+
+		var cropLabel = new Label { Name = "CropLabel", Text = "空" };
+		plotContainer.AddChild(cropLabel);
+
+		var progressBar = new ProgressBar
+		{
+			Name = "ProgressBar",
+			MinValue = 0,
+			MaxValue = 1,
+			Value = 0
+		};
+		plotContainer.AddChild(progressBar);
+
+		var actionContainer = new HBoxContainer { Name = "ActionContainer" };
+
+		var harvestButton = new Button { Name = "HarvestButton", Text = "收获", Visible = false };
+		harvestButton.Pressed += () => OnHarvestClicked(plotIndex);
+		actionContainer.AddChild(harvestButton);
+
+		var useResourceButton = new Button { Name = "UseResourceButton", Text = "使用物资", Visible = false };
+		useResourceButton.Pressed += () => OnUseResourceClicked(plotIndex);
+		actionContainer.AddChild(useResourceButton);
+
+		plotContainer.AddChild(actionContainer);
+
+		_plotsContainer.AddChild(plotContainer);
+		_plotUIs[plotIndex] = plotContainer;
+
+		UpdatePlotUI(plotIndex);
+	}
+
+	private void UpdatePlotUI(int plotIndex)
+	{
+		if (!_plotUIs.ContainsKey(plotIndex)) return;
+		var plotUI = _plotUIs[plotIndex];
+		var farming = GameRoot.Instance?.FarmingSystem;
+		var dataMgr = GameRoot.Instance?.DataManager;
+		if (farming == null) return;
+		if (!farming.Plots.ContainsKey(plotIndex)) return;
+		var plot = farming.Plots[plotIndex];
+
+		var cropLabel = plotUI.GetNodeOrNull<Label>("CropLabel");
+		var progressBar = plotUI.GetNodeOrNull<ProgressBar>("ProgressBar");
+		var harvestButton = plotUI.GetNodeOrNull<Button>("ActionContainer/HarvestButton");
+		var useResourceButton = plotUI.GetNodeOrNull<Button>("ActionContainer/UseResourceButton");
+
+		if (plot.IsOccupied && !string.IsNullOrEmpty(plot.CropId))
+		{
+			var cropData = dataMgr?.GetCrop(plot.CropId);
+			if (cropData != null)
+			{
+				cropLabel.Text = $"{cropData.Name}\n进度: {plot.GrowthProgress * 100:F1}%";
+				progressBar.Value = plot.GrowthProgress;
+				harvestButton.Visible = plot.IsReady;
+				useResourceButton.Visible = !plot.IsReady;
+			}
+		}
+		else
+		{
+			cropLabel.Text = "空";
+			progressBar.Value = 0;
+			harvestButton.Visible = false;
+			useResourceButton.Visible = false;
+		}
+	}
+
+	private void UpdateAllFarmUI()
+	{
+		if (GameRoot.Instance?.FarmingSystem == null) return;
+		foreach (var idx in _plotUIs.Keys)
+		{
+			UpdatePlotUI(idx);
+		}
+		UpdateActiveEffectsUI();
+		UpdateResourcesUI();
+	}
+
+	private void UpdateActiveEffectsUI()
+	{
+		if (_activeEffectsContainer == null) return;
+		var effects = GameRoot.Instance?.CropEffectSystem?.GetActiveEffects();
+		foreach (var child in _activeEffectsContainer.GetChildren()) child.QueueFree();
+		if (effects != null && effects.Count > 0)
+		{
+			foreach (var effect in effects)
+			{
+				var label = new Label { Text = $"✓ {effect.CropName} ({effect.EffectType})" };
+				_activeEffectsContainer.AddChild(label);
+			}
+		}
+		else
+		{
+			var label = new Label { Text = "暂无激活效果", Modulate = new Color(0.7f,0.7f,0.7f) };
+			_activeEffectsContainer.AddChild(label);
+		}
+	}
+
+	private void UpdateResourcesUI()
+	{
+		if (_resourcesContainer == null) return;
+		var resources = GameRoot.Instance?.CombatResourceSystem?.GetPlayerResources();
+		foreach (var child in _resourcesContainer.GetChildren()) child.QueueFree();
+		if (resources == null || resources.Count == 0)
+		{
+			var label = new Label { Text = "暂无物资", Modulate = new Color(0.7f,0.7f,0.7f) };
+			_resourcesContainer.AddChild(label);
+		}
+		else
+		{
+			foreach (var res in resources)
+			{
+				var data = GameRoot.Instance?.CombatResourceSystem?.GetResourceData(res.Key);
+				if (data != null)
+				{
+					_resourcesContainer.AddChild(new Label { Text = $"{data.Name} x{res.Value}" });
+				}
+			}
+		}
+	}
+
+	// 重用现有事件处理或新增相关的返回更新UI的逻辑
+	private void OnCropGrowthUpdated(string cropId, int plotIndex, float progress)
+	{
+		UpdatePlotUI(plotIndex);
+	}
+
+	private void OnResourceAppliedToCrop(int plotIndex, string resourceId)
+	{
+		UpdatePlotUI(plotIndex);
+		UpdateResourcesUI();
+		// 通知显示
+		var resourceData = GameRoot.Instance?.CombatResourceSystem?.GetResourceData(resourceId);
+		if (resourceData != null) ShowNotification($"对地块 {plotIndex + 1} 使用了 {resourceData.Name}");
+	}
+
+	private void OnCombatResourcesGenerated_Farm(Dictionary<string, int> resources)
+	{
+		UpdateResourcesUI();
+		if (resources == null || resources.Count == 0) return;
+		var names = new List<string>();
+		foreach (var kv in resources)
+		{
+			var data = GameRoot.Instance?.CombatResourceSystem?.GetResourceData(kv.Key);
+			if (data != null) names.Add(data.Name);
+		}
+		if (names.Count>0) ShowNotification($"战斗胜利！获得物资: {string.Join(", ", names)}");
+	}
+
+	// 交互
+	private void OnPlotClicked(int plotIndex)
+	{
+		_selectedPlotIndex = plotIndex;
+		var farming = GameRoot.Instance?.FarmingSystem;
+		if (farming == null || !farming.Plots.ContainsKey(plotIndex)) return;
+		var plot = farming.Plots[plotIndex];
+		if (!plot.IsOccupied)
+		{
+			ShowCropSelection(plotIndex);
+		}
+		else
+		{
+			ShowCropInfo(plotIndex);
+		}
+	}
+
+	private void OnHarvestClicked(int plotIndex)
+	{
+		var reward = GameRoot.Instance?.FarmingSystem?.TryHarvestCrop(plotIndex);
+		if (reward != null)
+		{
+			GD.Print("收获成功！获得奖励");
+			UpdatePlotUI(plotIndex);
+		}
+		else
+		{
+			GD.PrintErr("收获失败");
+		}
+	}
+
+	private void OnUseResourceClicked(int plotIndex)
+	{
+		ShowResourceSelection(plotIndex);
+	}
+
+	private void OnCloseFarmButtonPressed()
+	{
+		// 关闭农场并进入地图探索
+		if (_gameManager != null)
+		{
+			// 关闭农场后通过 Main.StartGame 触发战斗地图测试。
+			// StartGame 会初始化新游戏并负责状态切换。
+			var mainNode = GetNodeOrNull<Main>("/root/Main");
+			if (mainNode != null)
+			{
+				mainNode.CallDeferred(nameof(Main.StartGame));
+				GD.Print("调用 Main.StartGame 进行测试流程");
+			}
+		}
+		if (_currentFarmUI != null)
+		{
+			_currentFarmUI.QueueFree();
+		}
+
+		
+	}
+
+	private void ShowCropSelection(int plotIndex)
+	{
+		if (_cropSelectionContainer == null) return;
+		foreach (var child in _cropSelectionContainer.GetChildren()) child.QueueFree();
+		var allCrops = GameRoot.Instance?.DataManager?.GetAllCrops();
+		var title = new Label { Text = "选择要种植的作物:" };
+		title.AddThemeFontSizeOverride("font_size", 18);
+		_cropSelectionContainer.AddChild(title);
+		if (allCrops != null)
+		{
+			foreach (var crop in allCrops)
+			{
+				var btn = new Button { Text = $"{crop.Name}\n{crop.Description}" };
+				btn.Pressed += () => OnCropSelected(plotIndex, crop.Id);
+				_cropSelectionContainer.AddChild(btn);
+			}
+		}
+		var cancel = new Button { Text = "取消" };
+		cancel.Pressed += () => { foreach (var child in _cropSelectionContainer.GetChildren()) child.QueueFree(); };
+		_cropSelectionContainer.AddChild(cancel);
+	}
+
+	private void OnCropSelected(int plotIndex, string cropId)
+	{
+		if (GameRoot.Instance?.FarmingSystem == null) return;
+		if (GameRoot.Instance.FarmingSystem.TryPlantCrop(plotIndex, cropId))
+		{
+			UpdatePlotUI(plotIndex);
+			foreach (var child in _cropSelectionContainer.GetChildren()) child.QueueFree();
+		}
+		else
+		{
+			GD.PrintErr($"种植失败: {cropId}");
+		}
+	}
+
+	private void ShowResourceSelection(int plotIndex)
+	{
+		var dialog = new AcceptDialog();
+		dialog.Title = "选择要使用的物资";
+		dialog.Size = new Vector2I(400,300);
+		var container = new VBoxContainer();
+		dialog.AddChild(container);
+		var resources = GameRoot.Instance?.CombatResourceSystem?.GetPlayerResources();
+		if (resources == null || resources.Count==0)
+		{
+			container.AddChild(new Label { Text = "没有可用物资" });
+		}
+		else
+		{
+			foreach (var res in resources)
+			{
+				var data = GameRoot.Instance?.CombatResourceSystem?.GetResourceData(res.Key);
+				if (data != null)
+				{
+					var btn = new Button { Text = $"{data.Name} x{res.Value}\n{data.Description}" };
+					btn.Pressed += () => {
+						if (_gameManager.UseResourceOnCrop(res.Key, plotIndex))
+						{
+							UpdatePlotUI(plotIndex);
+							UpdateResourcesUI();
+							dialog.QueueFree();
+						}
+						else GD.PrintErr("使用物资失败");
+					};
+					container.AddChild(btn);
+				}
+			}
+		}
+		var cancelBtn = new Button { Text = "取消" };
+		cancelBtn.Pressed += () => dialog.QueueFree();
+		container.AddChild(cancelBtn);
+		AddChild(dialog);
+		dialog.PopupCentered();
+	}
+
+	private void ShowCropInfo(int plotIndex)
+	{
+		GD.Print($"显示作物信息: 地块 {plotIndex}");
+	}
+
+	#endregion
 
 	#endregion
 
@@ -675,29 +1046,57 @@ public partial class UIManager : Control
 	{
 		var container = new VBoxContainer();
 		container.Name = "DefaultFarmUI";
-		
+		container.Alignment = BoxContainer.AlignmentMode.Center;
+		container.AddThemeConstantOverride("separation", 12);
+
+		// 标题和关闭按钮
 		var farmLabel = new Label();
-		farmLabel.Text = "农场界面";
+		farmLabel.Text = "农场";
 		farmLabel.AddThemeFontSizeOverride("font_size", 24);
 		container.AddChild(farmLabel);
-		
-		var cropInfo = new Label();
-		cropInfo.Name = "CropInfo";
-		cropInfo.Text = "作物: 无";
-		container.AddChild(cropInfo);
-		
-		var plantButton = new Button();
-		plantButton.Text = "种植小麦";
-		plantButton.Pressed += () => OnPlantButtonPressed("crop_wheat");
-		container.AddChild(plantButton);
-		
-		var harvestButton = new Button();
-		harvestButton.Text = "收获作物";
-		harvestButton.Pressed += OnHarvestButtonPressed;
-		container.AddChild(harvestButton);
-		
+		// 标题下方留白
+		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 10) });
+
+		var closeBtn = new Button();
+		closeBtn.Text = "关闭";
+		closeBtn.Pressed += OnCloseFarmButtonPressed;
+		container.AddChild(closeBtn);
+		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 8) });
+
+		// 地块容器
+		_plotsContainer = new GridContainer();
+		_plotsContainer.Name = "PlotsContainer";
+		_plotsContainer.Columns = 3;
+		_plotsContainer.AddThemeConstantOverride("h_separation", 10);
+		_plotsContainer.AddThemeConstantOverride("v_separation", 10);
+		container.AddChild(_plotsContainer);
+		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 12) });
+
+		// 作物选择容器
+		_cropSelectionContainer = new VBoxContainer();
+		_cropSelectionContainer.Name = "CropSelectionContainer";
+		_cropSelectionContainer.AddThemeConstantOverride("separation", 6);
+		container.AddChild(_cropSelectionContainer);
+		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 12) });
+
+		// 激活效果容器
+		_activeEffectsContainer = new VBoxContainer();
+		_activeEffectsContainer.Name = "ActiveEffectsContainer";
+		_activeEffectsContainer.AddThemeConstantOverride("separation", 6);
+		container.AddChild(_activeEffectsContainer);
+		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 12) });
+
+		// 物资容器
+		_resourcesContainer = new VBoxContainer();
+		_resourcesContainer.Name = "ResourcesContainer";
+		_resourcesContainer.AddThemeConstantOverride("separation", 6);
+		container.AddChild(_resourcesContainer);
+
 		_currentFarmUI = container;
 		AddChild(container);
+
+		// 完成初始设置
+		SetupFarmUI();
 	}
 
 	private void CreateDefaultRewardUI()
@@ -1089,11 +1488,13 @@ public partial class UIManager : Control
 	private void OnCropPlanted(string cropId, int plotIndex)
 	{
 		ShowNotification($"种植了作物: {cropId}");
+		UpdatePlotUI(plotIndex);
 	}
 
 	private void OnCropHarvested(string cropId, int plotIndex, CropReward reward)
 	{
 		ShowNotification($"收获了作物: {cropId}");
+		UpdatePlotUI(plotIndex);
 	}
 
 	private void OnRoomEntered(RoomData room)
@@ -1154,6 +1555,12 @@ public partial class UIManager : Control
 		{
 			ShowNotification($"作物效果已激活: {cropData.Name}");
 		}
+		UpdateActiveEffectsUI();
+	}
+
+	private void OnEnderChestOpened(EnderChestData chestData)
+	{
+		ShowEnderChestUI(chestData);
 	}
 
 	private void OnCropSelectedFromChest(string cropId, float costValue)
@@ -1190,19 +1597,6 @@ public partial class UIManager : Control
 		}
 	}
 
-	private void OnResourceAppliedToCrop(int plotIndex, string resourceId)
-	{
-		var resourceSystem = GameRoot.Instance?.CombatResourceSystem;
-		if (resourceSystem != null)
-		{
-			var resourceData = resourceSystem.GetResourceData(resourceId);
-			if (resourceData != null)
-			{
-				ShowNotification($"对地块 {plotIndex + 1} 使用了 {resourceData.Name}");
-			}
-		}
-	}
-
 	#endregion
 
 	#region UI按钮回调方法
@@ -1211,7 +1605,8 @@ public partial class UIManager : Control
 	{
 		if (_gameManager != null)
 		{
-			_gameManager.StartNewGame();
+			// 初始化玩家数据并直接进入农场界面（不显示地图）
+			_gameManager.InitializeNewGameForFarm();
 		}
 	}
 

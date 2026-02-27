@@ -58,8 +58,13 @@ public partial class GameManager : Node
         
         GD.Print("GameManager 初始化完成");
 
-        // 自动开始新游戏，直接进入走格子界面，跳过主菜单
-        CallDeferred(MethodName.StartNewGame);
+        // 保持在主菜单状态，延迟发送当前状态事件以便 UIManager 正确显示
+        CallDeferred(nameof(EmitInitialState));
+    }
+
+    private void EmitInitialState()
+    {
+        EventBus.Instance?.EmitGameStateChanged(CurrentState);
     }
     
     private void InitializePlayerData()
@@ -105,22 +110,41 @@ public partial class GameManager : Node
         eventBus.CropEffectApplied += OnCropEffectApplied;
         eventBus.CropEffectRemoved += OnCropEffectRemoved;
         eventBus.RoomEntered += OnRoomEntered;
-        eventBus.EnderChestOpened += OnEnderChestOpened;
     }
     
     // 公共方法
     public void StartNewGame()
     {
+        // 标准新游戏流程：初始化数据、生成地图并进入地图探索
         InitializePlayerData();
         CurrentFloor = 1;
         ChangeState(GameEnums.GameState.MapExploration);
-        
-        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
-        
+        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);   
         EventBus.Instance.EmitGameStarted();
-        GD.Print("新游戏开始");
+        GD.Print("新游戏开始");      
     }
-    
+
+    /// <summary>
+    /// 为仅进入农场的测试或试玩初始化新游戏（不直接进入地图）。
+    /// </summary>
+    public void InitializeNewGameForFarm()
+    {
+        InitializePlayerData();
+        CurrentFloor = 1;
+        // 不生成地图，直接进入耕作状态
+        ChangeState(GameEnums.GameState.Farming);
+        EventBus.Instance.EmitGameStarted();
+        GD.Print("新游戏（仅农场）初始化完成");
+    }
+
+    public void LoadMainMenu()
+    {
+        InitializePlayerData();
+        ChangeState(GameEnums.GameState.MainMenu);
+        EventBus.Instance.EmitGameStarted();
+    }
+
+
     public void ChangeState(GameEnums.GameState newState)
     {
         if (CurrentState == newState) return;
@@ -130,27 +154,6 @@ public partial class GameManager : Node
         
         GD.Print($"游戏状态改变: {newState}");
         
-        // 状态特定的逻辑
-        switch (newState)
-        {
-            case GameEnums.GameState.MainMenu:
-                // 主菜单逻辑
-                break;
-            case GameEnums.GameState.Combat:
-                // 战斗初始化
-                break;
-            case GameEnums.GameState.EnderChest:
-                // 末影箱逻辑
-                break;
-        }
-    }
-    
-    public void AdvanceToNextFloor()
-    {
-        CurrentFloor++;
-        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
-        ChangeState(GameEnums.GameState.MapExploration);
-        GD.Print($"进入下一层: {CurrentFloor}");
     }
     
     public void TogglePause()
@@ -548,10 +551,5 @@ public partial class GameManager : Node
         }
         
         return resourceSystem.GetPlayerResources();
-    }
-    
-    private void OnEnderChestOpened(EnderChestData chestData)
-    {
-        ChangeState(GameEnums.GameState.EnderChest);
     }
 }

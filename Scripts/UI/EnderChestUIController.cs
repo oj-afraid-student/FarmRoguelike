@@ -343,7 +343,7 @@ public partial class EnderChestUIController : Control
         // 返回地图
         if (_gameManager != null)
         {
-            _gameManager.AdvanceToNextFloor();
+           // _gameManager.AdvanceToNextFloor();
         }
         
         // 可以选择不销毁，以便下次使用
