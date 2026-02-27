@@ -897,9 +897,10 @@ public partial class UIManager : Control
 	{
 		var container = new VBoxContainer();
 		container.Name = "DefaultMainMenu";
+		container.SetAnchorsPreset(Control.LayoutPreset.Center);
+		container.GrowHorizontal = Control.GrowDirection.Both;
+		container.GrowVertical = Control.GrowDirection.Both;
 		container.Alignment = BoxContainer.AlignmentMode.Center;
-		container.Size = new Vector2(400, 300);
-		container.Position = new Vector2(GetViewportRect().Size.X / 2 - 200, GetViewportRect().Size.Y / 2 - 150);
 		
 		var title = new Label();
 		title.Text = "蝗灾农场防御战";
@@ -941,6 +942,8 @@ public partial class UIManager : Control
 		// 提供一个居中的容器
 		var box = new MarginContainer();
 		box.SetAnchorsPreset(Control.LayoutPreset.Center);
+		box.GrowHorizontal = Control.GrowDirection.Both;
+		box.GrowVertical = Control.GrowDirection.Both;
 		root.AddChild(box);
 		
 		var container = new VBoxContainer();
@@ -1068,6 +1071,9 @@ public partial class UIManager : Control
 	{
 		var container = new VBoxContainer();
 		container.Name = "DefaultFarmUI";
+		container.SetAnchorsPreset(Control.LayoutPreset.Center);
+		container.GrowHorizontal = Control.GrowDirection.Both;
+		container.GrowVertical = Control.GrowDirection.Both;
 		container.Alignment = BoxContainer.AlignmentMode.Center;
 		container.AddThemeConstantOverride("separation", 12);
 
@@ -1125,6 +1131,10 @@ public partial class UIManager : Control
 	{
 		var container = new VBoxContainer();
 		container.Name = "DefaultRewardUI";
+		container.SetAnchorsPreset(Control.LayoutPreset.Center);
+		container.GrowHorizontal = Control.GrowDirection.Both;
+		container.GrowVertical = Control.GrowDirection.Both;
+		container.Alignment = BoxContainer.AlignmentMode.Center;
 		
 		var rewardLabel = new Label();
 		rewardLabel.Text = "选择奖励";
@@ -1168,9 +1178,10 @@ public partial class UIManager : Control
 	{
 		var container = new VBoxContainer();
 		container.Name = "DefaultGameOverUI";
+		container.SetAnchorsPreset(Control.LayoutPreset.Center);
+		container.GrowHorizontal = Control.GrowDirection.Both;
+		container.GrowVertical = Control.GrowDirection.Both;
 		container.Alignment = BoxContainer.AlignmentMode.Center;
-		container.Size = new Vector2(400, 200);
-		container.Position = new Vector2(GetViewportRect().Size.X / 2 - 200, GetViewportRect().Size.Y / 2 - 100);
 		
 		var gameOverLabel = new Label();
 		gameOverLabel.Text = "游戏结束";
@@ -1200,9 +1211,10 @@ public partial class UIManager : Control
 	{
 		var container = new VBoxContainer();
 		container.Name = "DefaultPauseMenu";
+		container.SetAnchorsPreset(Control.LayoutPreset.Center);
+		container.GrowHorizontal = Control.GrowDirection.Both;
+		container.GrowVertical = Control.GrowDirection.Both;
 		container.Alignment = BoxContainer.AlignmentMode.Center;
-		container.Size = new Vector2(300, 200);
-		container.Position = new Vector2(GetViewportRect().Size.X / 2 - 150, GetViewportRect().Size.Y / 2 - 100);
 		
 		var pauseLabel = new Label();
 		pauseLabel.Text = "游戏暂停";

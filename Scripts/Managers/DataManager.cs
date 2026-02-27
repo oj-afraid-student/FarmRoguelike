@@ -44,7 +44,7 @@ public partial class DataManager : Node
         {
             Id = "crop_wheat",
             Name = "小麦",
-            Description = "基础作物，收获后恢复生命值",
+            Description = "恢复生命值",
             GrowthTimeSeconds = 300, // 5分钟
             Rewards = new CropReward
             {
