@@ -23,6 +23,7 @@ public partial class EventBus : Node
 	public event Action<int> PlayerDamaged; // damage
 	public event Action<string, int> EnemyDamaged; // enemyId, damage
 	public event Action<string> EnemyDefeated; // enemyId
+	public event Action<string> BossDefeated; // enemyId
 	public event Action<bool> CombatEnded; // playerWon
 	
 	// 农场事件
@@ -44,6 +45,7 @@ public partial class EventBus : Node
 	// 末影箱事件
 	public event Action<EnderChestData> EnderChestOpened; // 末影箱打开
 	public event Action<string, float> CropSelectedFromChest; // cropId, costValue
+    public event Action EnderChestClosed; // 末影箱关闭
 	
 	// 战斗物资事件
 	public event Action<Dictionary<string, int>> CombatResourcesGenerated; // 战斗物资生成
@@ -101,6 +103,11 @@ public partial class EventBus : Node
 	public void EmitEnemyDefeated(string enemyId)
 	{
 		EnemyDefeated?.Invoke(enemyId);
+	}
+
+	public void EmitBossDefeated(string enemyId)
+	{
+		BossDefeated?.Invoke(enemyId);
 	}
 	
 	public void EmitCropPlanted(string cropId, int plotIndex)
@@ -183,6 +190,11 @@ public partial class EventBus : Node
 		CropSelectedFromChest?.Invoke(cropId, costValue);
 	}
 
+	public void EmitEnderChestClosed()
+	{
+		EnderChestClosed?.Invoke();
+	}
+
 	public void EmitCombatEnded(bool playerWon)
 	{
 		CombatEnded?.Invoke(playerWon);
@@ -210,22 +222,26 @@ public partial class EventBus : Node
 
 	public void StartCombatRoom(RoomData room)
 	{
-		throw new NotImplementedException();
+		// Safe default: notify that a combat room was entered. GameManager is already subscribed to RoomEntered
+		NotificationRequested?.Invoke($"进入战斗房间: {room.Id}");
 	}
 
 	public void StartBossRoom(RoomData room)
 	{
-		throw new NotImplementedException();
+		// Safe default: notify that a boss room was entered
+		NotificationRequested?.Invoke($"进入Boss房间: {room.Id}");
 	}
 
 	public void StartRewardRoom(RoomData room)
 	{
-		throw new NotImplementedException();
+		// Safe default: notify that a reward room was entered
+		NotificationRequested?.Invoke($"进入奖励房间: {room.Id}");
 	}
 
 	public void StartTrapRoom(RoomData room)
 	{
-		throw new NotImplementedException();
+		// Safe default: notify that a trap room was entered
+		NotificationRequested?.Invoke($"进入陷阱房间: {room.Id}");
 	}
 
 	

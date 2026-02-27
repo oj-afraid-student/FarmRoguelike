@@ -317,8 +317,15 @@ public partial class GameManager : Node
     
     private void OnEnemyDefeated(string enemyId)
     {
-        // 战斗系统已经负责发放奖励（读取怪物配置和给予金币/经验），这里不需要再发了
+        // 战斗系统已经负责发放奖励（读取怪物配置和给予金币/经验），这里可以处理后续流程
         GD.Print($"GameManager 检测到击败敌人 {enemyId}");
+
+        // 如果是 Boss，发出专门事件以便 UI 提供返回农场的选项
+        var dm = GetNodeOrNull<DataManager>("/root/DataManager");
+        if (dm != null && dm.IsBossEnemy(enemyId))
+        {
+            EventBus.Instance?.EmitBossDefeated(enemyId);
+        }
     }
     
     private void OnCombatEnded(bool playerWon)

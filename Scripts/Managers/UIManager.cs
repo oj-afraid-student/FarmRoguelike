@@ -29,7 +29,10 @@ public partial class UIManager : Control
 	
 	// UI元素引用（通过Export在编辑器中设置）
 	[Export] private Label _playerHealthLabel;
+    private Label _combatPlayerHealthLabel; // 仅在默认战斗UI创建时赋值
+
 	[Export] private Label _playerGoldLabel;
+    private Label _combatPlayerShieldLabel; // 显示本回合护甲/护盾
 	[Export] private Label _floorLabel;
 	[Export] private Label _actionPointsLabel;
 	[Export] private HBoxContainer _handContainer;
@@ -52,6 +55,9 @@ public partial class UIManager : Control
 	// 通知系统
 	private Timer _notificationTimer;
 	private Queue<string> _notificationQueue = new Queue<string>();
+
+    // Boss 击败后等待末影箱关闭再弹窗标记
+    private string _pendingBossDefeatedEnemyId = null;
 
 		// --- 农场界面相关字段 (原 FarmUIController 内容合并) ---
 		[Export] private GridContainer _plotsContainer;
@@ -207,6 +213,9 @@ public partial class UIManager : Control
 		// 末影箱事件
 		eventBus.EnderChestOpened += OnEnderChestOpened;
 		eventBus.CropSelectedFromChest += OnCropSelectedFromChest;
+		eventBus.EnderChestClosed += OnEnderChestClosed;
+		// Boss 击败后选择返回农场
+		eventBus.BossDefeated += OnBossDefeated;
 		
 		// 战斗物资事件
 		eventBus.CombatResourcesGenerated += OnCombatResourcesGenerated;
@@ -951,6 +960,23 @@ public partial class UIManager : Control
 		container.Alignment = BoxContainer.AlignmentMode.Center;
 		box.AddChild(container);
 		
+		// 顶部：玩家生命与护盾显示
+		var playerStats = new HBoxContainer();
+		playerStats.Alignment = BoxContainer.AlignmentMode.Center;
+		playerStats.AddThemeConstantOverride("separation", 12);
+
+		_combatPlayerHealthLabel = new Label();
+		_combatPlayerHealthLabel.Name = "PlayerHealthLabel";
+		_combatPlayerHealthLabel.Text = "生命: --/--";
+		playerStats.AddChild(_combatPlayerHealthLabel);
+
+		_combatPlayerShieldLabel = new Label();
+		_combatPlayerShieldLabel.Name = "PlayerShieldLabel";
+		_combatPlayerShieldLabel.Text = "护甲: 0";
+		playerStats.AddChild(_combatPlayerShieldLabel);
+
+		container.AddChild(playerStats);
+
 		var enemyInfo = new Label();
 		enemyInfo.Name = "EnemyInfo";
 		enemyInfo.Text = "敌人: ???";
@@ -1069,6 +1095,7 @@ public partial class UIManager : Control
 
 	private void CreateDefaultFarmUI()
 	{
+		//调整布局结构，增加一个背景底板，并将内容放在一个居中的VBoxContainer中
 		var container = new VBoxContainer();
 		container.Name = "DefaultFarmUI";
 		container.SetAnchorsPreset(Control.LayoutPreset.Center);
@@ -1082,6 +1109,8 @@ public partial class UIManager : Control
 		farmLabel.Text = "农场";
 		farmLabel.AddThemeFontSizeOverride("font_size", 24);
 		container.AddChild(farmLabel);
+		//标题居中
+		farmLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		// 标题下方留白
 		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 10) });
 
@@ -1274,6 +1303,17 @@ public partial class UIManager : Control
 		{
 			_actionPointsLabel.Text = $"行动点: {playerData.ActionPoints}";
 		}
+
+		// 更新默认战斗UI上的玩家生命/护盾显示（如果创建了默认战斗UI）
+		var combatSys = GameRoot.Instance?.CombatSystem;
+		if (_combatPlayerHealthLabel != null && playerData != null)
+		{
+			_combatPlayerHealthLabel.Text = $"生命: {playerData.CurrentHealth}/{playerData.MaxHealth}";
+		}
+		if (_combatPlayerShieldLabel != null && combatSys != null)
+		{
+			_combatPlayerShieldLabel.Text = $"护甲: {combatSys.GetPlayerDefense()}";
+		}
 	}
 
 	private void UpdateFloorInfo()
@@ -1449,6 +1489,8 @@ public partial class UIManager : Control
 	{
 		ShowNotification($"使用卡牌: {cardId}");
 		UpdateHandCards();
+		// 卡牌可能会改变玩家的临时护甲/护盾，更新相关显示
+		UpdatePlayerStats();
 	}
 
 	private void OnPlayerDamaged(int damage)
@@ -1497,6 +1539,9 @@ public partial class UIManager : Control
 		
 		// 重新渲染空手牌
 		UpdateHandCards();
+
+		// 刷新玩家状态显示（生命/护甲）
+		UpdatePlayerStats();
 		
 		// 禁用所有卡牌交互
 		foreach (var cardUI in _cardUIs)
@@ -1517,6 +1562,9 @@ public partial class UIManager : Control
 		{
 			cardUI.SetInteractable(true);
 		}
+
+		// 刷新玩家状态显示（生命/护甲）
+		UpdatePlayerStats();
 	}
 
 	private void OnCropPlanted(string cropId, int plotIndex)
@@ -1604,6 +1652,57 @@ public partial class UIManager : Control
 		{
 			ShowNotification($"从末影箱获得: {cropData.Name}");
 		}
+	}
+
+	private void OnBossDefeated(string enemyId)
+	{
+		// 如果末影箱UI当前打开，等待其关闭后再弹出对话
+		_pendingBossDefeatedEnemyId = enemyId;
+		if (_currentEnderChestUI == null)
+		{
+			// 如果没有末影箱UI，则立即弹出
+			ShowBossDefeatedDialog(enemyId);
+		}
+		else
+		{
+			GD.Print("Boss 击败：等待末影箱选择完成后再弹出返回农场对话");
+		}
+	}
+
+	private void OnEnderChestClosed()
+	{
+		if (!string.IsNullOrEmpty(_pendingBossDefeatedEnemyId))
+		{
+			ShowBossDefeatedDialog(_pendingBossDefeatedEnemyId);
+			_pendingBossDefeatedEnemyId = null;
+		}
+	}
+
+	private void ShowBossDefeatedDialog(string enemyId)
+	{
+		var dialog = new AcceptDialog();
+		dialog.Title = "击败Boss";
+		dialog.DialogText = "你击败了Boss！是否要返回农场领取特殊奖励，或返回地图继续探索？";
+
+		var btnReturnFarm = new Button { Text = "返回农场" };
+		btnReturnFarm.Pressed += () => {
+			if (_gameManager != null) _gameManager.ChangeState(GameEnums.GameState.Farming);
+			dialog.QueueFree();
+		};
+
+		var btnReturnMap = new Button { Text = "返回地图" };
+		btnReturnMap.Pressed += () => {
+			if (_gameManager != null) _gameManager.ChangeState(GameEnums.GameState.MapExploration);
+			dialog.QueueFree();
+		};
+
+		var container = new VBoxContainer();
+		container.AddChild(new Label { Text = dialog.DialogText });
+		container.AddChild(btnReturnFarm);
+		container.AddChild(btnReturnMap);
+		dialog.AddChild(container);
+		AddChild(dialog);
+		dialog.PopupCentered();
 	}
 
 	private void OnCombatResourcesGenerated(Dictionary<string, int> resources)

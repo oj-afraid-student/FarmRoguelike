@@ -261,6 +261,12 @@ public partial class DataManager : Node
         if (_bossEnemies.ContainsKey(id)) return _bossEnemies[id].Clone();
         return null; // 这里以前返回 _enemies[id]，现在从两个字典查找
     }
+
+    // 判断某个敌人ID是否为Boss类型
+    public bool IsBossEnemy(string id)
+    {
+        return _bossEnemies.ContainsKey(id);
+    }
     
     public EnemyData GetRandomNormalEnemy()
     {
