@@ -414,8 +414,30 @@ public partial class UIManager : Control
 		if (_enderChestUIScene != null)
 		{
 			_currentEnderChestUI = _enderChestUIScene.Instantiate<Control>();
-			AddChild(_currentEnderChestUI);
-			
+			// 保证所有 UI 统一渲染在 CanvasLayer 上
+			_uiLayer.AddChild(_currentEnderChestUI);
+
+			// 尝试将场景内的主面板居中显示（若场景结构发生变化，做合理回退）
+			Control center = _currentEnderChestUI.GetNodeOrNull<Control>("CenterContainer");
+			if (center == null)
+			{
+				foreach (Node child in _currentEnderChestUI.GetChildren())
+				{
+					if (child is Control c)
+					{
+						center = c;
+						break;
+					}
+				}
+			}
+			if (center != null)
+			{
+				var viewportSize = GetViewport().GetVisibleRect().Size;
+				var targetPos = (viewportSize - center.Size) / 2;
+				// 使用延迟设置以确保在布局完成后应用位置
+				center.SetDeferred("rect_position", targetPos);
+			}
+
 			// 显示末影箱内容
 			var controller = _currentEnderChestUI as EnderChestUIController;
 			if (controller != null)

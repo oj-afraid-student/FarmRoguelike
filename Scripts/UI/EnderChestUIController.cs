@@ -331,6 +331,7 @@ public partial class EnderChestUIController : Control
     
     private void OnCloseButtonPressed()
     {
+        GD.Print("关闭末影箱UI");
         // 关闭末影箱
         if (_enderChestSystem != null)
         {
@@ -343,14 +344,21 @@ public partial class EnderChestUIController : Control
         // 返回地图
         if (_gameManager != null)
         {
-           // _gameManager.AdvanceToNextFloor();
+            // 使用延迟调用以保证当前UI隐藏/关闭逻辑先执行完
+            CallDeferred(() => _gameManager.ChangeState(GameEnums.GameState.MapExploration));
         }
         
         // 可以选择不销毁，以便下次使用
         // QueueFree();
     }
-    
+
+    private void CallDeferred(Action value)
+    {
+        throw new NotImplementedException();
+    }
+
     // 事件处理
+
     private void OnEnderChestOpened(EnderChestData chestData)
     {
         ShowEnderChest(chestData);
