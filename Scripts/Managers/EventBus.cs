@@ -41,6 +41,7 @@ public partial class EventBus : Node
 	public event Action<int> FloorCompleted; // floorNumber
 	public event Action<RewardData> RewardSelected;
 	public event Action<string> NotificationRequested; // message
+	public event Action<string> CenterPopupRequested; // center screen message
 	
 	// 末影箱事件
 	public event Action<EnderChestData> EnderChestOpened; // 末影箱打开
@@ -138,6 +139,11 @@ public partial class EventBus : Node
 	public void EmitNotificationRequested(string message)
 	{
 		NotificationRequested?.Invoke(message);
+	}
+	
+	public void EmitCenterPopupRequested(string message)
+	{
+		CenterPopupRequested?.Invoke(message);
 	}
 	
 	public void EmitStatUpdated(GameEnums.PlayerStatType statType, float value)

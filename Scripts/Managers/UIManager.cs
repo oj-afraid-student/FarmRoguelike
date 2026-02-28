@@ -29,10 +29,10 @@ public partial class UIManager : Control
 	
 	// UI元素引用（通过Export在编辑器中设置）
 	[Export] private Label _playerHealthLabel;
-    private Label _combatPlayerHealthLabel; // 仅在默认战斗UI创建时赋值
+	private Label _combatPlayerHealthLabel; // 仅在默认战斗UI创建时赋值
 
 	[Export] private Label _playerGoldLabel;
-    private Label _combatPlayerShieldLabel; // 显示本回合护甲/护盾
+	private Label _combatPlayerShieldLabel; // 显示本回合护甲/护盾
 	[Export] private Label _floorLabel;
 	[Export] private Label _actionPointsLabel;
 	[Export] private HBoxContainer _handContainer;
@@ -56,8 +56,8 @@ public partial class UIManager : Control
 	private Timer _notificationTimer;
 	private Queue<string> _notificationQueue = new Queue<string>();
 
-    // Boss 击败后等待末影箱关闭再弹窗标记
-    private string _pendingBossDefeatedEnemyId = null;
+	// Boss 击败后等待末影箱关闭再弹窗标记
+	private string _pendingBossDefeatedEnemyId = null;
 
 		// --- 农场界面相关字段 (原 FarmUIController 内容合并) ---
 		[Export] private GridContainer _plotsContainer;
@@ -209,6 +209,7 @@ public partial class UIManager : Control
 		eventBus.RoomEntered += OnRoomEntered;
 		eventBus.FloorCompleted += OnFloorCompleted;
 		eventBus.NotificationRequested += OnNotificationRequested;
+		eventBus.CenterPopupRequested += OnCenterPopupRequested;
 		
 		// 末影箱事件
 		eventBus.EnderChestOpened += OnEnderChestOpened;
@@ -1095,62 +1096,83 @@ public partial class UIManager : Control
 
 	private void CreateDefaultFarmUI()
 	{
-		//调整布局结构，增加一个背景底板，并将内容放在一个居中的VBoxContainer中
-		var container = new VBoxContainer();
-		container.Name = "DefaultFarmUI";
-		container.SetAnchorsPreset(Control.LayoutPreset.Center);
-		container.GrowHorizontal = Control.GrowDirection.Both;
-		container.GrowVertical = Control.GrowDirection.Both;
-		container.Alignment = BoxContainer.AlignmentMode.Center;
-		container.AddThemeConstantOverride("separation", 12);
+		//调整布局结构：使用全屏根节点，整体靠左排列
+		var rootControl = new Control();
+		rootControl.Name = "DefaultFarmUI";
+		rootControl.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 
-		// 标题和关闭按钮
+		var mainMargin = new MarginContainer();
+		mainMargin.SetAnchorsPreset(Control.LayoutPreset.LeftWide);
+		mainMargin.AddThemeConstantOverride("margin_left", 40);
+		mainMargin.AddThemeConstantOverride("margin_top", 100);
+		mainMargin.AddThemeConstantOverride("margin_bottom", 40);
+		mainMargin.MouseFilter = Control.MouseFilterEnum.Ignore;
+		rootControl.AddChild(mainMargin);
+
+		var mainHBox = new HBoxContainer();
+		mainHBox.AddThemeConstantOverride("separation", 50);
+		mainMargin.AddChild(mainHBox);
+
+		// 左侧第一列：农场标题、关闭按钮、地块容器
+		var leftCol = new VBoxContainer();
+		leftCol.Alignment = BoxContainer.AlignmentMode.Begin;
+		leftCol.AddThemeConstantOverride("separation", 12);
+		mainHBox.AddChild(leftCol);
+
 		var farmLabel = new Label();
 		farmLabel.Text = "农场";
 		farmLabel.AddThemeFontSizeOverride("font_size", 24);
-		container.AddChild(farmLabel);
-		//标题居中
 		farmLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		// 标题下方留白
-		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 10) });
+		leftCol.AddChild(farmLabel);
+		
+		leftCol.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 10) });
 
 		var closeBtn = new Button();
 		closeBtn.Text = "关闭";
 		closeBtn.Pressed += OnCloseFarmButtonPressed;
-		container.AddChild(closeBtn);
-		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 8) });
+		leftCol.AddChild(closeBtn);
+		
+		leftCol.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 8) });
 
-		// 地块容器
 		_plotsContainer = new GridContainer();
 		_plotsContainer.Name = "PlotsContainer";
 		_plotsContainer.Columns = 3;
 		_plotsContainer.AddThemeConstantOverride("h_separation", 10);
 		_plotsContainer.AddThemeConstantOverride("v_separation", 10);
-		container.AddChild(_plotsContainer);
-		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 12) });
+		leftCol.AddChild(_plotsContainer);
+
+		// 左侧第二列：选择作物、物资效果、激活库存
+		var rightCol = new VBoxContainer();
+		rightCol.Alignment = BoxContainer.AlignmentMode.Begin;
+		rightCol.AddThemeConstantOverride("separation", 20);
+		mainHBox.AddChild(rightCol);
 
 		// 作物选择容器
+		var cropSelectionTitle = new Label { Text = "=== 选择作物 ===" };
+		rightCol.AddChild(cropSelectionTitle);
 		_cropSelectionContainer = new VBoxContainer();
 		_cropSelectionContainer.Name = "CropSelectionContainer";
 		_cropSelectionContainer.AddThemeConstantOverride("separation", 6);
-		container.AddChild(_cropSelectionContainer);
-		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 12) });
+		rightCol.AddChild(_cropSelectionContainer);
 
 		// 激活效果容器
+		var activeEffectsTitle = new Label { Text = "=== 激活效果 ===" };
+		rightCol.AddChild(activeEffectsTitle);
 		_activeEffectsContainer = new VBoxContainer();
 		_activeEffectsContainer.Name = "ActiveEffectsContainer";
 		_activeEffectsContainer.AddThemeConstantOverride("separation", 6);
-		container.AddChild(_activeEffectsContainer);
-		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 12) });
+		rightCol.AddChild(_activeEffectsContainer);
 
 		// 物资容器
+		var resourcesTitle = new Label { Text = "=== 物资库存 ===" };
+		rightCol.AddChild(resourcesTitle);
 		_resourcesContainer = new VBoxContainer();
 		_resourcesContainer.Name = "ResourcesContainer";
 		_resourcesContainer.AddThemeConstantOverride("separation", 6);
-		container.AddChild(_resourcesContainer);
+		rightCol.AddChild(_resourcesContainer);
 
-		_currentFarmUI = container;
-		AddChild(container);
+		_currentFarmUI = rootControl;
+		_uiLayer.AddChild(rootControl);
 
 		// 完成初始设置
 		SetupFarmUI();
@@ -1411,6 +1433,53 @@ public partial class UIManager : Control
 		}
 	}
 
+	private void OnCenterPopupRequested(string message)
+	{
+		ShowCenterPopup(message);
+	}
+
+	private void ShowCenterPopup(string message)
+	{
+		var popupContainer = new CenterContainer();
+		popupContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		popupContainer.MouseFilter = Control.MouseFilterEnum.Ignore;
+		
+		var panel = new PanelContainer();
+		panel.MouseFilter = Control.MouseFilterEnum.Ignore;
+		var styleBox = new StyleBoxFlat();
+		styleBox.BgColor = new Color(0, 0, 0, 0.7f);
+		styleBox.SetCornerRadiusAll(10);
+		styleBox.ContentMarginLeft = 40;
+		styleBox.ContentMarginRight = 40;
+		styleBox.ContentMarginTop = 20;
+		styleBox.ContentMarginBottom = 20;
+		panel.AddThemeStyleboxOverride("panel", styleBox);
+
+		var label = new Label();
+		label.Text = message;
+		label.HorizontalAlignment = HorizontalAlignment.Center;
+		label.AddThemeFontSizeOverride("font_size", 32);
+		
+		panel.AddChild(label);
+		popupContainer.AddChild(panel);
+		
+		if (_uiLayer != null)
+		{
+			_uiLayer.AddChild(popupContainer);
+		}
+		else
+		{
+			AddChild(popupContainer);
+		}
+
+		var tween = CreateTween();
+		popupContainer.Modulate = new Color(1, 1, 1, 0);
+		tween.TweenProperty(popupContainer, "modulate", new Color(1, 1, 1, 1), 0.3f);
+		tween.TweenInterval(2.0f);
+		tween.TweenProperty(popupContainer, "modulate", new Color(1, 1, 1, 0), 0.5f);
+		tween.TweenCallback(Callable.From(popupContainer.QueueFree));
+	}
+
 	#endregion
 
 	#region 事件处理方法
@@ -1499,9 +1568,15 @@ public partial class UIManager : Control
 		UpdatePlayerStats();
 		
 		// 伤害数字效果
-		if (_playerHealthLabel != null)
+		if (IsInstanceValid(_playerHealthLabel) && _playerHealthLabel.IsInsideTree())
 		{
 			ShowDamageEffect(damage, _playerHealthLabel.GlobalPosition, false);
+		}
+		else
+		{
+			// 如果没有找到玩家血量标签，默认显示在屏幕中央
+			var viewportSize = GetViewport().GetVisibleRect().Size;
+			ShowDamageEffect(damage, viewportSize / 2, false);
 		}
 	}
 

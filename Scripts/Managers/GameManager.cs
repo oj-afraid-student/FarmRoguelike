@@ -253,6 +253,7 @@ public partial class GameManager : Node
                 string rewardMsg = $"[系统] 你发现了一个宝箱！获得了 {goldReward} 金币。当前金币: {PlayerData.Gold}";
                 GD.Print(rewardMsg);
                 EventBus.Instance?.EmitNotificationRequested(rewardMsg);
+                EventBus.Instance?.EmitCenterPopupRequested($"宝箱房间\n获得了 {goldReward} 金币！");
                 
                 GameRoot.Instance?.MapSystem?.CompleteCurrentRoom();
                 // 返回地图继续探索
@@ -267,6 +268,7 @@ public partial class GameManager : Node
                 string trapMsg = $"[系统] 踩中陷阱！损失 {damage} 生命和 {goldLoss} 金币。剩余生命: {PlayerData.CurrentHealth}";
                 GD.Print(trapMsg);
                 EventBus.Instance?.EmitNotificationRequested(trapMsg);
+                EventBus.Instance?.EmitCenterPopupRequested($"陷阱房间\n损失了 {damage} 生命和 {goldLoss} 金币！");
                 
                 GameRoot.Instance?.MapSystem?.CompleteCurrentRoom();
                 if (PlayerData.CurrentHealth > 0)
