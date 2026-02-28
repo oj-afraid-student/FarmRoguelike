@@ -210,6 +210,7 @@ public partial class UIManager : Control
 		eventBus.FloorCompleted += OnFloorCompleted;
 		eventBus.NotificationRequested += OnNotificationRequested;
 		eventBus.CenterPopupRequested += OnCenterPopupRequested;
+		eventBus.MapVisualsUpdateRequested += OnMapVisualsUpdateRequested;
 		
 		// 末影箱事件
 		eventBus.EnderChestOpened += OnEnderChestOpened;
@@ -321,9 +322,17 @@ public partial class UIManager : Control
 			GD.Print("地图UI场景未加载，显示默认UI");
 		}
 		
+		// 注意：这里必须等到场景树更新之后再重新绘制地图，否则刚创建的 MapGrid 节点尚未被
+		// Godot 树接管，而前一个 MapUI 的 QueueFree 可能还未被释放，会导致节点冲突
+		// 使用 CallDeferred 把地图重绘推迟到下一帧执行
+		CallDeferred("_RefreshMapUI");
+		ShowNotification("探索地图中...");
+	}
+	
+	private void _RefreshMapUI()
+	{
 		UpdateMapNavigation();
 		UpdateMapVisuals();
-		ShowNotification("探索地图中...");
 	}
 
 	private void ShowCombatUI()
@@ -1327,14 +1336,23 @@ public partial class UIManager : Control
 		}
 
 		// 更新默认战斗UI上的玩家生命/护盾显示（如果创建了默认战斗UI）
+		// 必须用 IsInstanceValid 而不是 != null，否则在 ClearAllUI 后访问已被销毁的节点会抛异常
 		var combatSys = GameRoot.Instance?.CombatSystem;
-		if (_combatPlayerHealthLabel != null && playerData != null)
+		if (IsInstanceValid(_combatPlayerHealthLabel) && playerData != null)
 		{
 			_combatPlayerHealthLabel.Text = $"生命: {playerData.CurrentHealth}/{playerData.MaxHealth}";
 		}
-		if (_combatPlayerShieldLabel != null && combatSys != null)
+		else
+		{
+			_combatPlayerHealthLabel = null; // 清除失效引用
+		}
+		if (IsInstanceValid(_combatPlayerShieldLabel) && combatSys != null)
 		{
 			_combatPlayerShieldLabel.Text = $"护甲: {combatSys.GetPlayerDefense()}";
+		}
+		else
+		{
+			_combatPlayerShieldLabel = null; // 清除失效引用
 		}
 	}
 
@@ -1656,27 +1674,29 @@ public partial class UIManager : Control
 
 	private void OnRoomEntered(RoomData room)
 	{
-		// 具体的节点提示现在由 GameManager 负责通过事件分发，或者在这里统一处理
-		// UI不再执行默认的提示以支持自定义的格式
-		// ShowNotification($"进入房间: {room.Type}");
-		
 		// 更新地图UI中的房间信息
-		if (_currentMapUI != null)
+		if (IsInstanceValid(_currentMapUI))
 		{
 			var roomInfo = _currentMapUI.GetNodeOrNull<Label>("CenterBox/BgPanel/MarginBox/VBoxContainer/RoomInfo");
 			if (roomInfo != null)
 			{
 				roomInfo.Text = $"当前房间: {room.Type}";
 			}
-			
-			UpdateMapNavigation();
-			UpdateMapVisuals();
 		}
+		
+		// 延迟执行地图高亮，确保当前帧所有 Free() 操作完成后再重绘地图
+		CallDeferred("_RefreshMapUI");
 	}
 	
 	private void OnNotificationRequested(string message)
 	{
 		ShowNotification(message);
+	}
+	
+	private void OnMapVisualsUpdateRequested()
+	{
+		// 延迟执行确保当前帧内所有 Free/QueueFree 操作已完成
+		CallDeferred("_RefreshMapUI");
 	}
 
 	private void OnFloorCompleted(int floorNumber)
@@ -1903,13 +1923,22 @@ public partial class UIManager : Control
 	{
 		if (_currentMapUI == null) return;
 		var mapSystem = GameRoot.Instance?.MapSystem;
-		if (mapSystem == null) return;
+		if (mapSystem == null) 
+		{
+			return;
+		}
 		
 		var currentRoom = mapSystem.CurrentRoom;
-		if (currentRoom == null) return;
+		if (currentRoom == null) 
+		{
+			return;
+		}
 		
 		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/MapGrid");
-		if (mapGrid == null) return;
+		if (mapGrid == null) 
+		{
+			return;
+		}
 		
 		// 获取地图尺寸 (通过向底层系统发请求，这里简化为根据当前层数计算出的默认大小，或者通过反射/扩展公开接口)
 		// 为了简单起见，既然层数影响尺寸：3 + Mathf.Min(floor / 3, 2);
@@ -1919,10 +1948,11 @@ public partial class UIManager : Control
 		
 		mapGrid.Columns = mapSize;
 		
-		// 清理旧节点
+		// 必须立即释放节点，否则 GridContainer 会因为 QueueFree 的延迟导致布局完全错乱并且把新节点挤出屏幕外
 		foreach (Node child in mapGrid.GetChildren())
 		{
-			child.QueueFree();
+			mapGrid.RemoveChild(child);
+			child.Free();
 		}
 		
 		// 重新生成格子 (GridContainer 的子节点按行依次排列，所以外侧循环 Y，内侧循环 X)
@@ -1995,13 +2025,29 @@ public partial class UIManager : Control
 						label.Text = "";
 					}
 					
-					// 如果是BOSS特殊标记
+					// 如果是特殊房间特殊标记
 					if (room.Type == GameEnums.RoomType.Boss)
 					{
 						label.Text = "B";
-						if (pos != currentRoom.Position)
+						if (pos != currentRoom.Position && !room.IsVisited)
 						{
-						   if (!room.IsVisited) cell.Color = new Color(0.5f, 0.1f, 0.1f, 1f); // 暗红
+						   cell.Color = new Color(0.5f, 0.1f, 0.1f, 1f); // 暗红
+						}
+					}
+					else if (room.Type == GameEnums.RoomType.Trap)
+					{
+						if (pos != currentRoom.Position && !room.IsVisited)
+						{
+							label.Text = "T";
+							cell.Color = new Color(0.5f, 0.3f, 0.1f, 1f); // 橘黑/暗橙
+						}
+					}
+					else if (room.Type == GameEnums.RoomType.Reward)
+					{
+						if (pos != currentRoom.Position && !room.IsVisited)
+						{
+							label.Text = "R";
+							cell.Color = new Color(0.1f, 0.5f, 0.5f, 1f); // 蓝绿
 						}
 					}
 				}

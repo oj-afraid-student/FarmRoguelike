@@ -42,6 +42,7 @@ public partial class EventBus : Node
 	public event Action<RewardData> RewardSelected;
 	public event Action<string> NotificationRequested; // message
 	public event Action<string> CenterPopupRequested; // center screen message
+	public event Action MapVisualsUpdateRequested; // request UI to update map
 	
 	// 末影箱事件
 	public event Action<EnderChestData> EnderChestOpened; // 末影箱打开
@@ -149,6 +150,11 @@ public partial class EventBus : Node
 	public void EmitStatUpdated(GameEnums.PlayerStatType statType, float value)
 	{
 		StatUpdated?.Invoke(statType, value);
+	}
+	
+	public void EmitMapVisualsUpdateRequested()
+	{
+	    MapVisualsUpdateRequested?.Invoke();
 	}
 	
 	public void EmitCardAddedToDeck(string cardId)

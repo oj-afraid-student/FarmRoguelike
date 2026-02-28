@@ -236,6 +236,8 @@ public partial class GameManager : Node
     // 事件处理
     private void OnRoomEntered(RoomData room)
     {
+        try
+        {
         if (room.IsCleared)
         {
             string msg = $"[系统] 你来到了已经清理过的 {room.Type} 房间。";
@@ -256,24 +258,28 @@ public partial class GameManager : Node
                 EventBus.Instance?.EmitCenterPopupRequested($"宝箱房间\n获得了 {goldReward} 金币！");
                 
                 GameRoot.Instance?.MapSystem?.CompleteCurrentRoom();
-                // 返回地图继续探索
-                ChangeState(GameEnums.GameState.MapExploration);
+                // 仅通知 UI 刷新地图网格即可
+                EventBus.Instance?.EmitMapVisualsUpdateRequested();
                 break;
                 
             case GameEnums.RoomType.Trap:
                 int damage = 10;
                 int goldLoss = 5;
+                
                 ApplyDamageToPlayer(damage);
                 PlayerData.Gold = Math.Max(0, PlayerData.Gold - goldLoss);
+                
                 string trapMsg = $"[系统] 踩中陷阱！损失 {damage} 生命和 {goldLoss} 金币。剩余生命: {PlayerData.CurrentHealth}";
                 GD.Print(trapMsg);
+                
                 EventBus.Instance?.EmitNotificationRequested(trapMsg);
                 EventBus.Instance?.EmitCenterPopupRequested($"陷阱房间\n损失了 {damage} 生命和 {goldLoss} 金币！");
                 
                 GameRoot.Instance?.MapSystem?.CompleteCurrentRoom();
                 if (PlayerData.CurrentHealth > 0)
                 {
-                    ChangeState(GameEnums.GameState.MapExploration);
+                    // 仅通知 UI 刷新地图网格即可，避免触发 ClearAllUI
+                    EventBus.Instance?.EmitMapVisualsUpdateRequested();
                 }
                 break;
                 
@@ -310,6 +316,11 @@ public partial class GameManager : Node
                     ChangeState(GameEnums.GameState.MapExploration);
                 }
                 break;
+        }
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"[Error] GameManager.OnRoomEntered 处理异常: {ex}");
         }
     }
     private void OnPlayerDamaged(int damage)
