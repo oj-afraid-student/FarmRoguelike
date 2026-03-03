@@ -13,6 +13,7 @@ public partial class UIManager : Control
 	private PackedScene _gameOverScene;
 	private PackedScene _pauseMenuScene;
 	private PackedScene _enderChestUIScene;
+
 	
 	// 当前UI实例
 	private Control _currentCombatUI;
@@ -23,6 +24,8 @@ public partial class UIManager : Control
 	private Control _currentGameOver;
 	private Control _currentPauseMenu;
 	private Control _currentEnderChestUI;
+	private Control _currentSaveLoadUI;   // 存档/读档界面实例
+
 	
 	// 画布层保证渲染在其上
 	private CanvasLayer _uiLayer;
@@ -46,6 +49,7 @@ public partial class UIManager : Control
 	
 	// UI状态
 	private bool _isInitialized = false;
+	private bool _isSaveMode = true;       // true=存档模式，false=读档模式
 	// 初始化为非法值以确保首次状态切换生效
 	private GameEnums.GameState _lastGameState = (GameEnums.GameState)(-1);
 	
@@ -414,18 +418,15 @@ public partial class UIManager : Control
 
 	private void ShowPauseMenu()
 	{
-		if (_pauseMenuScene != null)
+		// 如果已存在暂停菜单，先销毁
+		if (_currentPauseMenu != null)
 		{
-			_currentPauseMenu = _pauseMenuScene.Instantiate<Control>();
-			AddChild(_currentPauseMenu);
-			
-			// 连接暂停菜单按钮
-			ConnectPauseMenuButtons();
+			_currentPauseMenu.QueueFree();
+			_currentPauseMenu = null;
 		}
-		else
-		{
-			CreateDefaultPauseMenu();
-		}
+		
+		// 直接调用默认创建方法
+		CreateDefaultPauseMenu();
 	}
 
 	private void ShowEnderChestUI(EnderChestData chestData)
@@ -543,6 +544,7 @@ public partial class UIManager : Control
 		{
 			// 显示暂停菜单
 			ShowPauseMenu();
+			GD.Print("游戏已暂停，显示暂停菜单");
 		}
 		else
 		{
@@ -931,10 +933,12 @@ public partial class UIManager : Control
 		startButton.Pressed += OnStartButtonPressed;
 		container.AddChild(startButton);
 		
-		var loadButton = new Button();
-		loadButton.Text = "加载存档";
-		loadButton.Pressed += OnLoadButtonPressed;
-		container.AddChild(loadButton);
+		// 在开始游戏、加载存档等按钮之后，添加：
+        var saveLoadButton = new Button();
+        saveLoadButton.Text = "存档/读档";
+        saveLoadButton.Pressed += OnOpenSaveLoadUIPressed;
+        container.AddChild(saveLoadButton);
+        // 原有退出按钮...
 		
 		var settingsButton = new Button();
 		settingsButton.Text = "设置";
@@ -1050,6 +1054,16 @@ public partial class UIManager : Control
 		mapLabel.AddThemeFontSizeOverride("font_size", 24);
 		mapLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		innerContainer.AddChild(mapLabel);
+
+		var pauseButton = new Button();
+		pauseButton.Text = "暂停";
+		pauseButton.Pressed += () => {
+        if (_gameManager != null)
+        {
+            _gameManager.TogglePause();
+        }
+    	};
+		innerContainer.AddChild(pauseButton);
 		
 		var roomInfo = new Label();
 		roomInfo.Name = "RoomInfo";
@@ -1101,6 +1115,9 @@ public partial class UIManager : Control
 		
 		_currentMapUI = container;
 		_uiLayer.AddChild(container);
+
+		//添加暂停按钮
+
 	}
 
 	private void CreateDefaultFarmUI()
@@ -1269,36 +1286,209 @@ public partial class UIManager : Control
 
 	private void CreateDefaultPauseMenu()
 	{
-		var container = new VBoxContainer();
-		container.Name = "DefaultPauseMenu";
-		container.SetAnchorsPreset(Control.LayoutPreset.Center);
-		container.GrowHorizontal = Control.GrowDirection.Both;
-		container.GrowVertical = Control.GrowDirection.Both;
-		container.Alignment = BoxContainer.AlignmentMode.Center;
+		 // 全屏半透明黑色背景层，阻止点击穿透
+		var overlay = new ColorRect();
+		overlay.Name = "PauseOverlay";
+		overlay.Color = new Color(0, 0, 0, 0.8f);
+		overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		overlay.MouseFilter = Control.MouseFilterEnum.Stop;   // 阻止穿透
+		overlay.ProcessMode = Node.ProcessModeEnum.Always;    // 确保暂停时仍处理输入
+
+		// 居中容器用于放置菜单面板
+		var centerContainer = new CenterContainer();
+		centerContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		centerContainer.MouseFilter = Control.MouseFilterEnum.Pass; // 传递事件给子节点
+		overlay.AddChild(centerContainer);
+
+		// 菜单面板（白色圆角，带阴影和边框）
+		var menuPanel = new PanelContainer();
+		menuPanel.CustomMinimumSize = new Vector2(450, 350);
 		
-		var pauseLabel = new Label();
-		pauseLabel.Text = "游戏暂停";
-		pauseLabel.AddThemeFontSizeOverride("font_size", 28);
-		container.AddChild(pauseLabel);
-		
-		var resumeButton = new Button();
-		resumeButton.Text = "继续游戏";
-		resumeButton.Pressed += OnResumeButtonPressed;
-		container.AddChild(resumeButton);
-		
-		var settingsButton = new Button();
-		settingsButton.Text = "设置";
-		settingsButton.Pressed += OnPauseSettingsButtonPressed;
-		container.AddChild(settingsButton);
-		
-		var mainMenuButton = new Button();
-		mainMenuButton.Text = "返回主菜单";
-		mainMenuButton.Pressed += OnPauseMainMenuButtonPressed;
-		container.AddChild(mainMenuButton);
-		
-		_currentPauseMenu = container;
-		AddChild(container);
+		var styleBox = new StyleBoxFlat();
+		styleBox.BgColor = new Color(0.98f, 0.98f, 0.98f, 1);
+		styleBox.SetCornerRadiusAll(12);
+		styleBox.ShadowColor = new Color(0, 0, 0, 0.6f);
+		styleBox.ShadowSize = 12;
+		styleBox.ShadowOffset = new Vector2(3, 3);
+		styleBox.BorderWidthTop = 2;
+		styleBox.BorderWidthBottom = 2;
+		styleBox.BorderWidthLeft = 2;
+		styleBox.BorderWidthRight = 2;
+		styleBox.BorderColor = new Color(0.4f, 0.4f, 0.4f, 1);
+		menuPanel.AddThemeStyleboxOverride("panel", styleBox);
+
+		centerContainer.AddChild(menuPanel);
+
+		// 垂直布局放置菜单内容
+		var vbox = new VBoxContainer();
+		vbox.Alignment = BoxContainer.AlignmentMode.Center;
+		vbox.AddThemeConstantOverride("separation", 20);
+		vbox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		vbox.CustomMinimumSize = new Vector2(300, 0);
+		menuPanel.AddChild(vbox);
+
+		// 标题
+		var titleLabel = new Label();
+		titleLabel.Text = "游戏暂停";
+		titleLabel.AddThemeFontSizeOverride("font_size", 36);
+		titleLabel.AddThemeColorOverride("font_color", new Color(0.2f, 0.2f, 0.2f));
+		titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		vbox.AddChild(titleLabel);
+
+		vbox.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 10) });
+
+		// 按钮
+		var resumeBtn = CreateMenuButton("继续游戏");
+		resumeBtn.Pressed += OnResumeButtonPressed;
+		vbox.AddChild(resumeBtn);
+
+		var settingsBtn = CreateMenuButton("设置");
+		settingsBtn.Pressed += OnPauseSettingsButtonPressed;
+		vbox.AddChild(settingsBtn);
+
+		var saveLoadBtn = CreateMenuButton("存档/读档");
+		saveLoadBtn.Pressed += OnOpenSaveLoadUIPressed;
+		vbox.AddChild(saveLoadBtn);
+
+		var mainMenuBtn = CreateMenuButton("返回主菜单");
+		mainMenuBtn.Pressed += OnPauseMainMenuButtonPressed;
+		vbox.AddChild(mainMenuBtn);
+
+		// 保存引用并添加到UI层
+		_currentPauseMenu = overlay;
+		_uiLayer.AddChild(overlay); 
 	}
+
+	private Button CreateMenuButton(string text)
+	{
+		var btn = new Button();
+		btn.Text = text;
+		btn.CustomMinimumSize = new Vector2(220, 50);
+		btn.AddThemeFontSizeOverride("font_size", 18);
+		return btn;
+	}
+
+	/// <summary>
+    /// 创建默认存档/读档界面
+    /// </summary>
+    private void CreateDefaultSaveLoadUI()
+    {
+        var root = new ColorRect();
+        root.Name = "DefaultSaveLoadUI";
+        root.Color = new Color(0, 0, 0, 0.9f);
+        root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		root.ProcessMode = Node.ProcessModeEnum.Always;
+
+        // 主容器
+        var mainVBox = new VBoxContainer();
+        mainVBox.SetAnchorsPreset(Control.LayoutPreset.Center);
+        mainVBox.GrowHorizontal = Control.GrowDirection.Both;
+        mainVBox.GrowVertical = Control.GrowDirection.Both;
+        mainVBox.Alignment = BoxContainer.AlignmentMode.Center;
+        root.AddChild(mainVBox);
+
+        // 标题
+        var titleLabel = new Label();
+        titleLabel.Text = _isSaveMode ? "保存游戏" : "加载游戏";
+        titleLabel.AddThemeFontSizeOverride("font_size", 28);
+        titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        mainVBox.AddChild(titleLabel);
+
+        // 模式切换按钮组
+        var modeHBox = new HBoxContainer();
+        modeHBox.Alignment = BoxContainer.AlignmentMode.Center;
+        modeHBox.AddThemeConstantOverride("separation", 20);
+        mainVBox.AddChild(modeHBox);
+
+        var saveModeBtn = new Button();
+        saveModeBtn.Text = "存档";
+        saveModeBtn.Disabled = _isSaveMode;   // 当前模式禁用对应按钮
+        saveModeBtn.Pressed += () => SwitchSaveLoadMode(true);
+        modeHBox.AddChild(saveModeBtn);
+
+        var loadModeBtn = new Button();
+        loadModeBtn.Text = "读档";
+        loadModeBtn.Disabled = !_isSaveMode;
+        loadModeBtn.Pressed += () => SwitchSaveLoadMode(false);
+        modeHBox.AddChild(loadModeBtn);
+
+        // 存档槽列表
+        var slotGrid = new GridContainer();
+        slotGrid.Columns = 1;   // 纵向排列
+        slotGrid.AddThemeConstantOverride("v_separation", 10);
+        mainVBox.AddChild(slotGrid);
+
+        var saveManager = GameRoot.Instance?.SaveManager;
+        var slotInfos = saveManager?.GetAllSlotInfos() ?? new List<SaveFileInfo>();
+
+        for (int i = 0; i < 3; i++)
+        {
+            int slot = i + 1;
+            var info = (slotInfos.Count > i) ? slotInfos[i] : null;
+
+            var slotPanel = new PanelContainer();
+            var styleBox = new StyleBoxFlat();
+            styleBox.BgColor = new Color(0.2f, 0.2f, 0.2f, 1);
+            styleBox.SetCornerRadiusAll(5);
+            slotPanel.AddThemeStyleboxOverride("panel", styleBox);
+            slotPanel.CustomMinimumSize = new Vector2(400, 80);
+            slotPanel.MouseFilter = Control.MouseFilterEnum.Stop;
+
+            var slotHBox = new HBoxContainer();
+            slotHBox.AddThemeConstantOverride("separation", 20);
+            slotPanel.AddChild(slotHBox);
+
+            // 槽位编号
+            var slotNumberLabel = new Label();
+            slotNumberLabel.Text = $"槽位 {slot}";
+            slotNumberLabel.AddThemeFontSizeOverride("font_size", 18);
+            slotHBox.AddChild(slotNumberLabel);
+
+            // 存档信息
+            var infoLabel = new Label();
+            if (info != null)
+            {
+                infoLabel.Text = $"{info.SaveTime:yyyy-MM-dd HH:mm}\n楼层: {info.Floor}  版本: {info.Version}";
+            }
+            else
+            {
+                infoLabel.Text = "空存档";
+                infoLabel.Modulate = new Color(0.7f, 0.7f, 0.7f);
+            }
+            infoLabel.AddThemeFontSizeOverride("font_size", 14);
+            slotHBox.AddChild(infoLabel);
+
+            // 操作按钮
+            var actionBtn = new Button();
+            if (_isSaveMode)
+            {
+                actionBtn.Text = "保存";
+                actionBtn.Pressed += () => OnSaveSlotPressed(slot);
+            }
+            else
+            {
+                actionBtn.Text = info != null ? "加载" : "无存档";
+                actionBtn.Disabled = info == null;
+                actionBtn.Pressed += () => OnLoadSlotPressed(slot);
+            }
+            slotHBox.AddChild(actionBtn);
+
+            // 如果是存档模式且已有存档，添加“覆盖”提示（可选）
+            // 这里保持简单
+
+            slotGrid.AddChild(slotPanel);
+        }
+
+        // 关闭按钮
+        var closeBtn = new Button();
+        closeBtn.Text = "返回";
+        closeBtn.Pressed += OnCloseSaveLoadUIPressed;
+        mainVBox.AddChild(closeBtn);
+
+        _currentSaveLoadUI = root;
+        _uiLayer.AddChild(root);
+    }
+
 
 	#endregion
 
@@ -1751,17 +1941,9 @@ public partial class UIManager : Control
 
 	private void OnBossDefeated(string enemyId)
 	{
-		// 如果末影箱UI当前打开，等待其关闭后再弹出对话
+		// 始终延迟显示返回选项：记录待处理的 boss id，等待末影箱选择/关闭后再弹出。
 		_pendingBossDefeatedEnemyId = enemyId;
-		if (_currentEnderChestUI == null)
-		{
-			// 如果没有末影箱UI，则立即弹出
-			ShowBossDefeatedDialog(enemyId);
-		}
-		else
-		{
-			GD.Print("Boss 击败：等待末影箱选择完成后再弹出返回农场对话");
-		}
+		GD.Print("Boss 击败：已记录待处理状态，将在末影箱关闭后弹出返回农场对话");
 	}
 
 	private void OnEnderChestClosed()
@@ -2093,9 +2275,14 @@ public partial class UIManager : Control
 
 	private void OnResumeButtonPressed()
 	{
+		GD.Print("Resume button pressed");
 		if (_gameManager != null)
 		{
 			_gameManager.TogglePause();
+		}
+		else
+		{
+			GD.PrintErr("_gameManager is null in OnResumeButtonPressed");
 		}
 	}
 
@@ -2107,6 +2294,11 @@ public partial class UIManager : Control
 
 	private void OnPauseMainMenuButtonPressed()
 	{
+		if(_gameManager != null)
+		{
+			if (!_gameManager.IsPaused)
+			_gameManager.TogglePause(); // 先取消暂停状态，确保状态切换逻辑正常执行
+		}
 		OnMainMenuButtonPressed();
 	}
 
@@ -2126,6 +2318,104 @@ public partial class UIManager : Control
 			GD.PrintErr("GameRoot 中未找到 CombatSystem 无法出牌");
 		}
 	}
+
+	 /// <summary>
+    /// 切换存档/读档模式
+    /// </summary>
+    private void SwitchSaveLoadMode(bool isSave)
+    {
+        if (_isSaveMode == isSave) return;
+        _isSaveMode = isSave;
+        // 重新创建界面
+        if (_currentSaveLoadUI != null)
+        {
+            _currentSaveLoadUI.QueueFree();
+            _currentSaveLoadUI = null;
+        }
+        CreateDefaultSaveLoadUI();
+    }
+
+	/// <summary>
+    /// 打开存档/读档界面
+    /// </summary>
+    private void OnOpenSaveLoadUIPressed()
+    {
+        // 如果已经在存档界面，先关闭
+        if (_currentSaveLoadUI != null)
+        {
+            _currentSaveLoadUI.QueueFree();
+            _currentSaveLoadUI = null;
+        }
+        _isSaveMode = true;
+        CreateDefaultSaveLoadUI();
+    }
+
+    /// <summary>
+    /// 保存到指定槽位
+    /// </summary>
+    private void OnSaveSlotPressed(int slot)
+    {
+        var saveManager = GameRoot.Instance?.SaveManager;
+        if (saveManager != null)
+        {
+            bool success = saveManager.SaveToSlot(slot);
+            if (success)
+            {
+                ShowNotification($"存档成功 (槽位 {slot})");
+                // 刷新界面以显示更新的时间戳
+                OnCloseSaveLoadUIPressed();   // 关闭界面，也可以直接刷新
+            }
+            else
+            {
+                ShowNotification($"存档失败 (槽位 {slot})");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 从指定槽位加载
+    /// </summary>
+    private void OnLoadSlotPressed(int slot)
+    {
+        var saveManager = GameRoot.Instance?.SaveManager;
+        if (saveManager != null)
+        {
+            bool success = saveManager.LoadFromSlot(slot);
+            if (success)
+            {
+                ShowNotification($"读档成功 (槽位 {slot})");
+                OnCloseSaveLoadUIPressed();   // 关闭存档界面
+                // 游戏状态会自动切换，UIManager会响应 GameStateChanged 更新界面
+            }
+            else
+            {
+                ShowNotification($"读档失败 (槽位 {slot})");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 关闭存档/读档界面
+    /// </summary>
+    private void OnCloseSaveLoadUIPressed()
+    {
+        if (_currentSaveLoadUI != null)
+        {
+            _currentSaveLoadUI.QueueFree();
+            _currentSaveLoadUI = null;
+        }
+        // 根据当前游戏状态决定返回主菜单还是暂停菜单
+        if (_gameManager.CurrentState == GameEnums.GameState.MainMenu)
+        {
+            // 已经处于主菜单，无需额外操作
+        }
+        else if (_gameManager.IsPaused)
+        {
+            // 如果是从暂停菜单打开的，可能需要重新显示暂停菜单
+            ShowPauseMenu();   // 假设已有此方法
+        }
+        // 否则返回到当前状态界面，不需要额外处理
+    }
 
 	#endregion
 

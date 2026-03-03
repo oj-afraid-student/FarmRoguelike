@@ -7,11 +7,32 @@ using Godot;
 
 public partial class SaveManager : Node
 {
-    private const string SAVE_DIRECTORY = "user://saves";
     private const string SAVE_FILE_NAME = "save_game.json";
     private const string QUICK_SAVE_NAME = "quick_save.json";
-    
-    private string SaveDirectoryPath => ProjectSettings.GlobalizePath(SAVE_DIRECTORY);
+    private const string SAVE_SLOT_PREFIX = "slot";   // 存档槽前缀
+    private const string SAVE_SLOT_EXT = ".json";     // 存档扩展名
+
+    // 保存目录：相对路径到项目目录的父文件夹的父文件夹下的 saves 文件夹
+    // 即： project_root/../../saves
+    private string SaveDirectoryPath
+    {
+        get
+        {
+            try
+            {
+                var projectRoot = ProjectSettings.GlobalizePath("res://");
+                var relative = Path.Combine(projectRoot, "saves");
+                var full = Path.GetFullPath(relative);
+                return full;
+            }
+            catch
+            {
+                // 回退到用户目录下的 saves
+                return ProjectSettings.GlobalizePath("user://saves");
+            }
+        }
+    }
+
     private string SaveFilePath => Path.Combine(SaveDirectoryPath, SAVE_FILE_NAME);
     private string QuickSaveFilePath => Path.Combine(SaveDirectoryPath, QUICK_SAVE_NAME);
     
@@ -21,6 +42,45 @@ public partial class SaveManager : Node
         EnsureSaveDirectoryExists();
         
         GD.Print("SaveManager 初始化完成");
+    }
+
+    public override void _Input(InputEvent @event)
+    {
+        // 仅在按键按下且非回音事件时处理
+        if (!(@event is InputEventKey keyEvent))
+            return;
+
+        if (!keyEvent.Pressed || keyEvent.IsEcho())
+            return;
+
+        // 仅在非战斗时允许快速保存/加载
+        var gameManager = GameRoot.Instance?.GameManager;
+        if (gameManager == null)
+            return;
+
+        if (gameManager.CurrentState == GameEnums.GameState.Combat)
+        {
+            // 在战斗中禁用快捷存档/读档
+            return;
+        }
+
+        // F5 快速保存，F9 快速加载
+        if (keyEvent.Keycode == Key.F5)
+        {
+            bool ok = QuickSave();
+            if (ok)
+                EventBus.Instance?.EmitNotificationRequested("游戏已快速保存 (F5)");
+            else
+                EventBus.Instance?.EmitNotificationRequested("快速保存失败");
+        }
+        else if (keyEvent.Keycode == Key.F9)
+        {
+            bool ok = QuickLoad();
+            if (ok)
+                EventBus.Instance?.EmitNotificationRequested("已加载快速存档 (F9)");
+            else
+                EventBus.Instance?.EmitNotificationRequested("快速加载失败：未找到存档或加载出错");
+        }
     }
     
     private void EnsureSaveDirectoryExists()
@@ -247,27 +307,43 @@ public partial class SaveManager : Node
         
         // 恢复玩家数据
         gameManager.RestorePlayerData(saveData.PlayerData);
-        
-        // 恢复游戏状态
-        gameManager.SetCurrentFloor(saveData.CurrentFloor);
-        gameManager.ChangeState(saveData.CurrentState);
-        
-        // 恢复农场数据
+
+        // 先恢复各子系统数据（农场、作物效果、物资），确保在切换状态时系统已准备好
         if (farmingSystem != null && saveData.FarmingData != null)
         {
             RestoreFarmingData(farmingSystem, saveData.FarmingData);
         }
-        
-        // 恢复作物效果数据
+
         if (cropEffectSystem != null && saveData.CropEffectData != null)
         {
             RestoreCropEffectData(cropEffectSystem, saveData.CropEffectData);
         }
-        
-        // 恢复物资数据
+
         if (resourceSystem != null && saveData.ResourceData != null)
         {
             RestoreResourceData(resourceSystem, saveData.ResourceData);
+        }
+
+        // 恢复当前层数（不触发状态切换）
+        gameManager.SetCurrentFloor(saveData.CurrentFloor);
+
+        // 延迟切换游戏状态到下一帧，避免在加载过程中触发大量同步事件导致卡死
+        CallDeferred(nameof(DeferredChangeState), (Variant)(int)saveData.CurrentState);
+    }
+
+    private void DeferredChangeState(object stateObj)
+    {
+        try
+        {
+            var gameManager = GameRoot.Instance?.GameManager;
+            if (gameManager != null && stateObj is GameEnums.GameState state)
+            {
+                gameManager.ChangeState(state);
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"延迟切换游戏状态失败: {ex}");
         }
     }
     
@@ -395,6 +471,75 @@ public partial class SaveManager : Node
         {
             return null;
         }
+    }
+
+
+
+    /// <summary>
+    /// 获取指定槽位的文件名
+    /// </summary>
+    private string GetSlotFileName(int slot)
+    {
+        return $"{SAVE_SLOT_PREFIX}{slot}{SAVE_SLOT_EXT}";
+    }
+
+    /// <summary>
+    /// 保存游戏到指定槽位
+    /// </summary>
+    public bool SaveToSlot(int slot)
+    {
+        string fileName = GetSlotFileName(slot);
+        return SaveGame(fileName);
+    }
+
+    /// <summary>
+    /// 从指定槽位加载游戏
+    /// </summary>
+    public bool LoadFromSlot(int slot)
+    {
+        string fileName = GetSlotFileName(slot);
+        return LoadGame(fileName);
+    }
+
+    /// <summary>
+    /// 检查指定槽位是否有存档
+    /// </summary>
+    public bool HasSlotSave(int slot)
+    {
+        string fileName = GetSlotFileName(slot);
+        return HasSaveFile(fileName);
+    }
+
+    /// <summary>
+    /// 获取指定槽位的存档信息
+    /// </summary>
+    public SaveFileInfo GetSlotInfo(int slot)
+    {
+        string fileName = GetSlotFileName(slot);
+        return GetSaveFileInfo(fileName);
+    }
+
+    /// <summary>
+    /// 删除指定槽位的存档
+    /// </summary>
+    public bool DeleteSlotSave(int slot)
+    {
+        string fileName = GetSlotFileName(slot);
+        return DeleteSaveFile(fileName);
+    }
+
+    /// <summary>
+    /// 获取所有槽位的存档信息（最多支持3个槽位）
+    /// </summary>
+    public List<SaveFileInfo> GetAllSlotInfos()
+    {
+        var infos = new List<SaveFileInfo>();
+        for (int i = 1; i <= 3; i++)
+        {
+            var info = GetSlotInfo(i);
+            infos.Add(info);
+        }
+        return infos;
     }
 }
 

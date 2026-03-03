@@ -57,6 +57,9 @@ public partial class EventBus : Node
 	public event Action<GameEnums.PlayerStatType, float> StatUpdated;
 	public event Action<string> ItemCollected; // itemId
 	public event Action<string> CardAddedToDeck; // cardId
+
+	// 存档加载完成事件
+	public event Action LoadCompleted;
 	
 	public override void _Ready()
 	{
@@ -205,6 +208,11 @@ public partial class EventBus : Node
 	public void EmitEnderChestClosed()
 	{
 		EnderChestClosed?.Invoke();
+	}
+
+	public void EmitLoadCompleted()
+	{
+		LoadCompleted?.Invoke();
 	}
 
 	public void EmitCombatEnded(bool playerWon)
