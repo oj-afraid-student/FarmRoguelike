@@ -1033,6 +1033,15 @@ public partial class UIManager : Control
 		container.Name = "DefaultMapUI";
 		container.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		
+		// 添加背景图片
+		var background = new TextureRect();
+		background.Texture = GD.Load<Texture2D>("res://Graphics/combat.png");
+		background.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		background.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		// 设置拉伸模式以铺满全屏，可以根据需要调整
+		// background.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+		container.AddChild(background);
+		
 		var centerBox = new CenterContainer();
 		centerBox.Name = "CenterBox";
 		centerBox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -1077,6 +1086,11 @@ public partial class UIManager : Control
 		roomInfo.HorizontalAlignment = HorizontalAlignment.Center;
 		innerContainer.AddChild(roomInfo);
 		
+		// 加个 CenterContainer 把地图网格居中
+		var gridCenterer = new CenterContainer();
+		gridCenterer.Name = "GridCenterer";
+		innerContainer.AddChild(gridCenterer);
+		
 		// 加个地图网格容器来可视化地图
 		var mapGrid = new GridContainer();
 		mapGrid.Name = "MapGrid";
@@ -1084,40 +1098,62 @@ public partial class UIManager : Control
 		mapGrid.SetAnchorsPreset(Control.LayoutPreset.Center);
 		mapGrid.AddThemeConstantOverride("h_separation", 5);
 		mapGrid.AddThemeConstantOverride("v_separation", 5);
-		innerContainer.AddChild(mapGrid);
+		gridCenterer.AddChild(mapGrid);
 		
 		// 拉开点距离
 		innerContainer.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 20) });
 		
-		var moveButtons = new HBoxContainer();
-		moveButtons.Name = "MoveButtons";
-		moveButtons.Alignment = BoxContainer.AlignmentMode.Center;
-		
-		var upButton = new Button();
-		upButton.Name = "UpButton";
-		upButton.Text = "上";
-		upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
-		moveButtons.AddChild(upButton);
-		
-		var leftButton = new Button();
-		leftButton.Name = "LeftButton";
-		leftButton.Text = "左";
-		leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
-		moveButtons.AddChild(leftButton);
-		
-		var rightButton = new Button();
-		rightButton.Name = "RightButton";
-		rightButton.Text = "右";
-		rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
-		moveButtons.AddChild(rightButton);
-		
-		var downButton = new Button();
-		downButton.Name = "DownButton";
-		downButton.Text = "下";
-		downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
-		moveButtons.AddChild(downButton);
-		
-		innerContainer.AddChild(moveButtons);
+		var moveButtons = new GridContainer();
+	moveButtons.Name = "MoveButtons";
+	moveButtons.Columns = 3;
+	// 设置间距
+	moveButtons.AddThemeConstantOverride("h_separation", 10);
+	moveButtons.AddThemeConstantOverride("v_separation", 10);
+	// 居中整个十字键
+	moveButtons.SetAnchorsPreset(Control.LayoutPreset.Center);
+	
+	// 为了让整个区域在VBox中居中，我们可以再套一层CenterContainer
+	var dpadCenterer = new CenterContainer();
+	dpadCenterer.Name = "DPadCenterer";
+	innerContainer.AddChild(dpadCenterer);
+	dpadCenterer.AddChild(moveButtons);
+
+	// 第一行: 空, 上, 空
+	moveButtons.AddChild(new Control());
+	var upButton = new Button();
+	upButton.Name = "UpButton";
+	upButton.Text = "上";
+	upButton.CustomMinimumSize = new Vector2(60, 40);
+	upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
+	moveButtons.AddChild(upButton);
+	moveButtons.AddChild(new Control());
+
+	// 第二行: 左, 空, 右
+	var leftButton = new Button();
+	leftButton.Name = "LeftButton";
+	leftButton.Text = "左";
+	leftButton.CustomMinimumSize = new Vector2(60, 40);
+	leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
+	moveButtons.AddChild(leftButton);
+	
+	moveButtons.AddChild(new Control()); // 中间留空
+	
+	var rightButton = new Button();
+	rightButton.Name = "RightButton";
+	rightButton.Text = "右";
+	rightButton.CustomMinimumSize = new Vector2(60, 40);
+	rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
+	moveButtons.AddChild(rightButton);
+
+	// 第三行: 空, 下, 空
+	moveButtons.AddChild(new Control());
+	var downButton = new Button();
+	downButton.Name = "DownButton";
+	downButton.Text = "下";
+	downButton.CustomMinimumSize = new Vector2(60, 40);
+	downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
+	moveButtons.AddChild(downButton);
+	moveButtons.AddChild(new Control());
 		
 		_currentMapUI = container;
 		_uiLayer.AddChild(container);
@@ -2130,7 +2166,7 @@ public partial class UIManager : Control
 			return;
 		}
 		
-		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/MapGrid");
+		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/GridCenterer/MapGrid");
 		if (mapGrid == null) 
 		{
 			return;
