@@ -26,7 +26,6 @@ public partial class CombatSystem : Node2D
 	private int _enemyAiStateIndex = 0;
 	
 	private int _enemyPoisonStacks = 0;
-	private int _enemyPoisonDuration = 0;
 	private int _nextAttackDamageBonus = 0;
 	
 	private bool _isPlayerTurn = true;
@@ -79,7 +78,6 @@ public partial class CombatSystem : Node2D
 		_playerDefenseThisTurn = 0;
 		_enemyAiStateIndex = 0;
 		_enemyPoisonStacks = 0;
-		_enemyPoisonDuration = 0;
 		_nextAttackDamageBonus = 0;
 		
 		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
@@ -287,14 +285,9 @@ public partial class CombatSystem : Node2D
 					break;
 					
 				case "poison_stacks":
-					_enemyPoisonStacks += (int)effect.Value;
-					GD.Print($"施加了 {(int)effect.Value} 层中毒，当前层数: {_enemyPoisonStacks}");
-					break;
-					
-				case "poison_duration":
-					_enemyPoisonDuration = Math.Max(_enemyPoisonDuration, (int)effect.Value);
-					GD.Print($"中毒持续时间更新为: {_enemyPoisonDuration} 回合");
-					break;
+				_enemyPoisonStacks += (int)effect.Value;
+				GD.Print($"施加了 {(int)effect.Value} 层中毒，当前层数: {_enemyPoisonStacks}");
+				break;
 					
 				case "draw":
 					for (int i = 0; i < (int)effect.Value; i++)
@@ -426,16 +419,11 @@ public partial class CombatSystem : Node2D
 	{
 		GD.Print("敌人回合开始");
 		
-		if (_enemyPoisonDuration > 0 && _enemyPoisonStacks > 0)
+		if (_enemyPoisonStacks > 0)
 		{
 			int poisonDamage = _enemyPoisonStacks;
 			GD.Print($"目标中毒，受到 {poisonDamage} 点伤害！");
 			ApplyPoisonDamageToEnemy(poisonDamage);
-			_enemyPoisonDuration--;
-			if (_enemyPoisonDuration <= 0)
-			{
-				_enemyPoisonStacks = 0;
-			}
 		}
 
 		if (_currentEnemyHealth <= 0)

@@ -64,7 +64,7 @@ public partial class DataManager : Node
             Description = "对目标施加 1 层“中毒”状态。",
             Type = GameEnums.CardType.Skill,
             Cost = 1,
-            Effects = new Dictionary<string, float> { { "poison_stacks", 1 }, { "poison_duration", 2 } }
+            Effects = new Dictionary<string, float> { { "poison_stacks", 1 } }
         };
 
         _cards["card_observe_weakness"] = new CardData
