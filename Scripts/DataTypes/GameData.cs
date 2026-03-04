@@ -11,7 +11,7 @@ public class PlayerData
     public int CurrentHealth { get; set; } = 100; // 初始当前生命值
     public int Attack { get; set; } = 10; // 基础攻击力
     public int Defense { get; set; } = 5; // 基础防御力
-    public int ActionPoints { get; set; } = 3; // 每回合行动点数
+    public int Energy { get; set; } = 3; // 每回合能量
     public float Speed { get; set; } = 1.0f; // 速度影响行动顺序
     public float Luck { get; set; } = 1.0f; // 幸运值影响掉落等
     public int Gold { get; set; } = 50; // 初始金币数量
@@ -29,7 +29,7 @@ public class PlayerData
             GameEnums.PlayerStatType.MaxHealth => MaxHealth,
             GameEnums.PlayerStatType.Attack => Attack,
             GameEnums.PlayerStatType.Defense => Defense,
-            GameEnums.PlayerStatType.ActionPoints => ActionPoints,
+            GameEnums.PlayerStatType.Energy => Energy,
             GameEnums.PlayerStatType.Speed => Speed,
             GameEnums.PlayerStatType.Luck => Luck,
             _ => 0
@@ -52,8 +52,8 @@ public class PlayerData
             case GameEnums.PlayerStatType.Defense:
                 Defense = (int)value;
                 break;
-            case GameEnums.PlayerStatType.ActionPoints:
-                ActionPoints = (int)value;
+            case GameEnums.PlayerStatType.Energy:
+                Energy = (int)value;
                 break;
             case GameEnums.PlayerStatType.Speed:
                 Speed = value;

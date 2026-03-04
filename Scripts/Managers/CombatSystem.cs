@@ -25,8 +25,12 @@ public partial class CombatSystem : Node2D
 	private int _currentEnemyDefense = 0;
 	private int _enemyAiStateIndex = 0;
 	
+	private int _enemyPoisonStacks = 0;
+	private int _enemyPoisonDuration = 0;
+	private int _nextAttackDamageBonus = 0;
+	
 	private bool _isPlayerTurn = true;
-	private int _playerActionPoints = 3;
+	private int _playerEnergy = 3;
 	private int _playerDefenseThisTurn = 0;
 	
 	private List<string> _playerHand = new List<string>();
@@ -71,9 +75,12 @@ public partial class CombatSystem : Node2D
 		
 		_currentEnemyId = enemyId;
 		_isPlayerTurn = true;
-		_playerActionPoints = 3;
+		_playerEnergy = 3;
 		_playerDefenseThisTurn = 0;
 		_enemyAiStateIndex = 0;
+		_enemyPoisonStacks = 0;
+		_enemyPoisonDuration = 0;
+		_nextAttackDamageBonus = 0;
 		
 		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
 		if (dataManager != null)
@@ -180,7 +187,7 @@ public partial class CombatSystem : Node2D
 	
 	public void PlayCard(string cardId, string targetId = "")
 	{
-		if (!_isPlayerTurn || _playerActionPoints <= 0)
+		if (!_isPlayerTurn || _playerEnergy <= 0)
 		{
 			GD.Print("现在不能出牌");
 			return;
@@ -191,20 +198,31 @@ public partial class CombatSystem : Node2D
 			GD.Print($"手牌中没有卡牌: {cardId}");
 			return;
 		}
+
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager == null) return;
+		var cardData = dataManager.GetCard(cardId);
+		if (cardData == null) return;
+
+		if (_playerEnergy < cardData.Cost)
+		{
+			GD.Print($"能量不足，需要 {cardData.Cost} 能量");
+			return;
+		}
 		
 		_playerHand.Remove(cardId);
 		_playerDiscardPile.Add(cardId);
-		_playerActionPoints--;
+		_playerEnergy -= cardData.Cost;
 		
 		// 处理卡牌效果
 		ProcessCardEffect(cardId, targetId);
 		
 		_eventBus.EmitCardPlayed(cardId, targetId);
 		
-		GD.Print($"玩家打出卡牌: {cardId}，剩余行动点: {_playerActionPoints}");
+		GD.Print($"玩家打出卡牌: {cardId}，剩余能量: {_playerEnergy}");
 		
-		// 如果玩家没有行动点了，结束回合
-		if (_playerActionPoints <= 0)
+		// 如果玩家没有能量了，结束回合
+		if (_playerEnergy <= 0)
 		{
 			EndPlayerTurn();
 		}
@@ -237,7 +255,8 @@ public partial class CombatSystem : Node2D
 			switch (effect.Key.ToLower())
 			{
 				case "damage":
-					int damage = (int)effect.Value + (_playerData?.Attack ?? 0);
+					int damage = (int)effect.Value + (_playerData?.Attack ?? 0) + _nextAttackDamageBonus;
+					_nextAttackDamageBonus = 0; // 消耗Buff
 					ApplyDamageToEnemy(damage);
 					break;
 					
@@ -252,6 +271,41 @@ public partial class CombatSystem : Node2D
 					int weakAmount = (int)effect.Value;
 					_currentEnemyAttack = Math.Max(0, _currentEnemyAttack - weakAmount);
 					GD.Print($"敌人攻击力降低了 {weakAmount}点，当前攻击力: {_currentEnemyAttack}");
+					break;
+					
+				case "restore_energy":
+					_playerEnergy += (int)effect.Value;
+					GD.Print($"回复了 {(int)effect.Value} 点能量，当前能量: {_playerEnergy}");
+					break;
+					
+				case "heal":
+					if (_gameManager != null)
+					{
+						_gameManager.HealPlayer((int)effect.Value);
+						GD.Print($"恢复了 {(int)effect.Value} 点生命值");
+					}
+					break;
+					
+				case "poison_stacks":
+					_enemyPoisonStacks += (int)effect.Value;
+					GD.Print($"施加了 {(int)effect.Value} 层中毒，当前层数: {_enemyPoisonStacks}");
+					break;
+					
+				case "poison_duration":
+					_enemyPoisonDuration = Math.Max(_enemyPoisonDuration, (int)effect.Value);
+					GD.Print($"中毒持续时间更新为: {_enemyPoisonDuration} 回合");
+					break;
+					
+				case "draw":
+					for (int i = 0; i < (int)effect.Value; i++)
+					{
+						DrawCard();
+					}
+					break;
+					
+				case "buff_next_attack":
+					_nextAttackDamageBonus += (int)effect.Value;
+					GD.Print($"获得下一击伤害Buff: +{(int)effect.Value}");
 					break;
 					
 				default:
@@ -274,6 +328,20 @@ public partial class CombatSystem : Node2D
 		
 		_eventBus.EmitEnemyDamaged(_currentEnemyId, actualDamage);
 		GD.Print($"对敌人造成 {actualDamage} 点伤害（包含护甲减免），敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+	}
+	
+	private void ApplyPoisonDamageToEnemy(int damage)
+	{
+		_currentEnemyHealth -= damage;
+		
+		if (_currentEnemyHealth <= 0)
+		{
+			_currentEnemyHealth = 0;
+			EnemyDefeated();
+		}
+		
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, damage);
+		GD.Print($"毒素对敌人造成 {damage} 点真实伤害，敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
 	}
 	
 	private void EnemyDefeated()
@@ -358,6 +426,23 @@ public partial class CombatSystem : Node2D
 	{
 		GD.Print("敌人回合开始");
 		
+		if (_enemyPoisonDuration > 0 && _enemyPoisonStacks > 0)
+		{
+			int poisonDamage = _enemyPoisonStacks;
+			GD.Print($"目标中毒，受到 {poisonDamage} 点伤害！");
+			ApplyPoisonDamageToEnemy(poisonDamage);
+			_enemyPoisonDuration--;
+			if (_enemyPoisonDuration <= 0)
+			{
+				_enemyPoisonStacks = 0;
+			}
+		}
+
+		if (_currentEnemyHealth <= 0)
+		{
+			return; // 敌人被毒死，回合中止
+		}
+		
 		// 敌人攻击玩家
 		EnemyAttack();
 		
@@ -441,7 +526,7 @@ public partial class CombatSystem : Node2D
 	private void StartPlayerTurn()
 	{
 		_isPlayerTurn = true;
-		_playerActionPoints = 3; // 重置行动点
+		_playerEnergy = 3; // 重置能量
 		
 		// 抽牌 改为每回合抽 4 张
 		for (int i = 0; i < 4; i++)
@@ -495,9 +580,9 @@ public partial class CombatSystem : Node2D
 		return new List<string>(_playerHand);
 	}
 	
-	public int GetPlayerActionPoints()
+	public int GetPlayerEnergy()
 	{
-		return _playerActionPoints;
+		return _playerEnergy;
 	}
 	
 	public (int current, int max) GetEnemyHealth()

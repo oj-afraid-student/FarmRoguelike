@@ -34,7 +34,7 @@ public partial class GameManager : Node
         PlayerData.CurrentHealth = playerData.CurrentHealth;
         PlayerData.Attack = playerData.Attack;
         PlayerData.Defense = playerData.Defense;
-        PlayerData.ActionPoints = playerData.ActionPoints;
+        PlayerData.Energy = playerData.Energy;
         PlayerData.Speed = playerData.Speed;
         PlayerData.Luck = playerData.Luck;
         PlayerData.Gold = playerData.Gold;
@@ -74,12 +74,12 @@ public partial class GameManager : Node
         // 初始卡组
         PlayerData.Deck = new List<string>
         {
-            "card_attack_basic",
-            "card_attack_basic",
-            "card_attack_basic",
-            "card_defend_basic",
-            "card_defend_basic",
-            "card_defend_basic"
+            "card_scythe_slash",
+            "card_hoe_smash",
+            "card_raise_tools",
+            "card_urgent_bandage",
+            "card_spray_pesticide",
+            "card_observe_weakness"
         };
     }
     
