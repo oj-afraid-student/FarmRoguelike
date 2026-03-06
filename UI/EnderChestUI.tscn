@@ -29,54 +29,56 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_aajih")
 
-[node name="MainContainer" type="VBoxContainer" parent="." unique_id=207125439]
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=207125439]
 layout_mode = 1
-anchors_preset = 10
+anchors_preset = 15
 anchor_right = 1.0
-offset_left = 20.0
-offset_top = 20.0
-offset_right = -20.0
-offset_bottom = 600.0
+anchor_bottom = 1.0
 grow_horizontal = 2
-grow_vertical = 0
+grow_vertical = 2
+
+[node name="MainContainer" type="VBoxContainer" parent="CenterContainer" unique_id=207125440]
+custom_minimum_size = Vector2(800, 600)
+layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="Header" type="HBoxContainer" parent="MainContainer" unique_id=1110947900]
+[node name="Header" type="HBoxContainer" parent="CenterContainer/MainContainer" unique_id=1110947900]
 layout_mode = 2
 alignment = 1
 
-[node name="TitleLabel" type="Label" parent="MainContainer/Header" unique_id=1428331319]
+[node name="TitleLabel" type="Label" parent="CenterContainer/MainContainer/Header" unique_id=1428331319]
 layout_mode = 2
 text = "末影箱"
 
-[node name="CloseButton" type="Button" parent="MainContainer/Header" unique_id=293460977]
+[node name="CloseButton" type="Button" parent="CenterContainer/MainContainer/Header" unique_id=293460977]
 layout_mode = 2
 text = "x"
 
-[node name="DescriptionLabel" type="Label" parent="MainContainer" unique_id=344331458]
+[node name="DescriptionLabel" type="Label" parent="CenterContainer/MainContainer" unique_id=344331458]
 layout_mode = 2
 text = "选择你想要的作物，但需要付出代价……"
 horizontal_alignment = 1
 
-[node name="PlayerInfo" type="HBoxContainer" parent="MainContainer" unique_id=381829825]
+[node name="PlayerInfo" type="HBoxContainer" parent="CenterContainer/MainContainer" unique_id=381829825]
 layout_mode = 2
 theme_override_constants/separation = 24
+alignment = 1
 
-[node name="PlayerGoldLabel" type="Label" parent="MainContainer/PlayerInfo" unique_id=1541239180]
+[node name="PlayerGoldLabel" type="Label" parent="CenterContainer/MainContainer/PlayerInfo" unique_id=1541239180]
 layout_mode = 2
 text = "金币: 100"
 horizontal_alignment = 1
 
-[node name="PlayerHealthLabel" type="Label" parent="MainContainer/PlayerInfo" unique_id=671609537]
+[node name="PlayerHealthLabel" type="Label" parent="CenterContainer/MainContainer/PlayerInfo" unique_id=671609537]
 layout_mode = 2
 text = "生命: 80/100"
 horizontal_alignment = 1
 
-[node name="ScrollContainer" type="ScrollContainer" parent="MainContainer" unique_id=866181653]
-custom_minimum_size = Vector2(0, 320)
+[node name="ScrollContainer" type="ScrollContainer" parent="CenterContainer/MainContainer" unique_id=866181653]
+custom_minimum_size = Vector2(0, 450)
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="CropsContainer" type="VBoxContainer" parent="MainContainer/ScrollContainer" unique_id=659727702]
+[node name="CropsContainer" type="VBoxContainer" parent="CenterContainer/MainContainer/ScrollContainer" unique_id=659727702]
 layout_mode = 2
 size_flags_horizontal = 3

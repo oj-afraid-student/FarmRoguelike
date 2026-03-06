@@ -34,7 +34,7 @@ public partial class GameManager : Node
         PlayerData.CurrentHealth = playerData.CurrentHealth;
         PlayerData.Attack = playerData.Attack;
         PlayerData.Defense = playerData.Defense;
-        PlayerData.ActionPoints = playerData.ActionPoints;
+        PlayerData.Energy = playerData.Energy;
         PlayerData.Speed = playerData.Speed;
         PlayerData.Luck = playerData.Luck;
         PlayerData.Gold = playerData.Gold;
@@ -57,29 +57,30 @@ public partial class GameManager : Node
         SubscribeToEvents();
         
         GD.Print("GameManager 初始化完成");
+
+        // 保持在主菜单状态，延迟发送当前状态事件以便 UIManager 正确显示
+        CallDeferred(nameof(EmitInitialState));
+    }
+
+    private void EmitInitialState()
+    {
+        EventBus.Instance?.EmitGameStateChanged(CurrentState);
     }
     
     private void InitializePlayerData()
     {
         PlayerData = new PlayerData();
-
-		// 基础属性（根据策划数值）
-		PlayerData.MaxHealth = 50;
-		PlayerData.CurrentHealth = 50;
-		PlayerData.Attack = 7;
-		PlayerData.Defense = 3;
-		PlayerData.ActionPoints = 3;
-
-		// 初始卡组：六张基础战斗牌
-		PlayerData.Deck = new List<string>
-		{
-			"card_scythe_slash",        // 镰刀挥砍
-			"card_hoe_smash",           // 锄头猛击
-			"card_raise_tools",         // 架起农具
-			"card_emergency_bandage",   // 紧急包扎
-			"card_spray_pesticide",     // 喷农药
-			"card_observe_weakness"     // 观察弱点
-		};
+        
+        // 初始卡组
+        PlayerData.Deck = new List<string>
+        {
+            "card_scythe_slash",
+            "card_hoe_smash",
+            "card_raise_tools",
+            "card_urgent_bandage",
+            "card_spray_pesticide",
+            "card_observe_weakness"
+        };
     }
     
     private void InitializeDataManager()
@@ -102,23 +103,48 @@ public partial class GameManager : Node
         
         eventBus.PlayerDamaged += OnPlayerDamaged;
         eventBus.EnemyDefeated += OnEnemyDefeated;
+        eventBus.CombatEnded += OnCombatEnded;
         eventBus.CropHarvested += OnCropHarvested;
         eventBus.RewardSelected += OnRewardSelected;
         eventBus.StatUpdated += OnStatUpdated;
         eventBus.CropEffectApplied += OnCropEffectApplied;
         eventBus.CropEffectRemoved += OnCropEffectRemoved;
+        eventBus.RoomEntered += OnRoomEntered;
     }
     
     // 公共方法
     public void StartNewGame()
     {
+        // 标准新游戏流程：初始化数据、生成地图并进入地图探索
         InitializePlayerData();
         CurrentFloor = 1;
         ChangeState(GameEnums.GameState.MapExploration);
+        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);   
         EventBus.Instance.EmitGameStarted();
-        GD.Print("新游戏开始");
+        GD.Print("新游戏开始");      
     }
-    
+
+    /// <summary>
+    /// 为仅进入农场的测试或试玩初始化新游戏（不直接进入地图）。
+    /// </summary>
+    public void InitializeNewGameForFarm()
+    {
+        InitializePlayerData();
+        CurrentFloor = 1;
+        // 不生成地图，直接进入耕作状态
+        ChangeState(GameEnums.GameState.Farming);
+        EventBus.Instance.EmitGameStarted();
+        GD.Print("新游戏（仅农场）初始化完成");
+    }
+
+    public void LoadMainMenu()
+    {
+        InitializePlayerData();
+        ChangeState(GameEnums.GameState.MainMenu);
+        EventBus.Instance.EmitGameStarted();
+    }
+
+
     public void ChangeState(GameEnums.GameState newState)
     {
         if (CurrentState == newState) return;
@@ -128,16 +154,6 @@ public partial class GameManager : Node
         
         GD.Print($"游戏状态改变: {newState}");
         
-        // 状态特定的逻辑
-        switch (newState)
-        {
-            case GameEnums.GameState.MainMenu:
-                // 主菜单逻辑
-                break;
-            case GameEnums.GameState.Combat:
-                // 战斗初始化
-                break;
-        }
     }
     
     public void TogglePause()
@@ -218,6 +234,95 @@ public partial class GameManager : Node
     }
     
     // 事件处理
+    private void OnRoomEntered(RoomData room)
+    {
+        try
+        {
+        if (room.IsCleared)
+        {
+            string msg = $"[系统] 你来到了已经清理过的 {room.Type} 房间。";
+            GD.Print(msg);
+            EventBus.Instance?.EmitNotificationRequested(msg);
+            // 已经是 MapExploration 状态，UI 会自动高亮当前块
+            return;
+        }
+
+        switch (room.Type)
+        {
+            case GameEnums.RoomType.Reward:
+                int goldReward = 20;
+                PlayerData.Gold += goldReward;
+                string rewardMsg = $"[系统] 你发现了一个宝箱！获得了 {goldReward} 金币。当前金币: {PlayerData.Gold}";
+                GD.Print(rewardMsg);
+                EventBus.Instance?.EmitNotificationRequested(rewardMsg);
+                EventBus.Instance?.EmitCenterPopupRequested($"宝箱房间\n获得了 {goldReward} 金币！");
+                
+                GameRoot.Instance?.MapSystem?.CompleteCurrentRoom();
+                // 仅通知 UI 刷新地图网格即可
+                EventBus.Instance?.EmitMapVisualsUpdateRequested();
+                break;
+                
+            case GameEnums.RoomType.Trap:
+                int damage = 10;
+                int goldLoss = 5;
+                
+                ApplyDamageToPlayer(damage);
+                PlayerData.Gold = Math.Max(0, PlayerData.Gold - goldLoss);
+                
+                string trapMsg = $"[系统] 踩中陷阱！损失 {damage} 生命和 {goldLoss} 金币。剩余生命: {PlayerData.CurrentHealth}";
+                GD.Print(trapMsg);
+                
+                EventBus.Instance?.EmitNotificationRequested(trapMsg);
+                EventBus.Instance?.EmitCenterPopupRequested($"陷阱房间\n损失了 {damage} 生命和 {goldLoss} 金币！");
+                
+                GameRoot.Instance?.MapSystem?.CompleteCurrentRoom();
+                if (PlayerData.CurrentHealth > 0)
+                {
+                    // 仅通知 UI 刷新地图网格即可，避免触发 ClearAllUI
+                    EventBus.Instance?.EmitMapVisualsUpdateRequested();
+                }
+                break;
+                
+            case GameEnums.RoomType.Combat:
+                var normalEnemy = _dataManager?.GetRandomNormalEnemy();
+                if (normalEnemy != null)
+                {
+                    string msg = $"[系统] 你遭遇了敌人 {normalEnemy.Name}！准备战斗。";
+                    GD.Print(msg);
+                    EventBus.Instance?.EmitNotificationRequested(msg);
+                    EventBus.Instance?.EmitCombatStarted(normalEnemy.Id);
+                    ChangeState(GameEnums.GameState.Combat);
+                }
+                else
+                {
+                    GD.PrintErr("没有找到普通敌人，跳过战斗");
+                    ChangeState(GameEnums.GameState.MapExploration);
+                }
+                break;
+                
+            case GameEnums.RoomType.Boss:
+                var bossEnemy = _dataManager?.GetRandomBossEnemy();
+                if (bossEnemy != null)
+                {
+                    string msg = $"[系统] 你遭遇了强大的Boss {bossEnemy.Name}！";
+                    GD.Print(msg);
+                    EventBus.Instance?.EmitNotificationRequested(msg);
+                    EventBus.Instance?.EmitCombatStarted(bossEnemy.Id);
+                    ChangeState(GameEnums.GameState.Combat);
+                }
+                else
+                {
+                    GD.PrintErr("没有找到Boss敌人，跳过战斗");
+                    ChangeState(GameEnums.GameState.MapExploration);
+                }
+                break;
+        }
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"[Error] GameManager.OnRoomEntered 处理异常: {ex}");
+        }
+    }
     private void OnPlayerDamaged(int damage)
     {
         GD.Print($"玩家受到 {damage} 点伤害，剩余生命: {PlayerData.CurrentHealth}");
@@ -225,9 +330,42 @@ public partial class GameManager : Node
     
     private void OnEnemyDefeated(string enemyId)
     {
-        // 给予金币奖励
-        PlayerData.Gold += 10;
-        GD.Print($"击败敌人 {enemyId}，获得10金币，当前金币: {PlayerData.Gold}");
+        // 战斗系统已经负责发放奖励（读取怪物配置和给予金币/经验），这里可以处理后续流程
+        GD.Print($"GameManager 检测到击败敌人 {enemyId}");
+
+        // 如果是 Boss，发出专门事件以便 UI 提供返回农场的选项
+        var dm = GetNodeOrNull<DataManager>("/root/DataManager");
+        if (dm != null && dm.IsBossEnemy(enemyId))
+        {
+            EventBus.Instance?.EmitBossDefeated(enemyId);
+        }
+    }
+    
+    private void OnCombatEnded(bool playerWon)
+    {
+        if (playerWon)
+        {
+            string msg = "[系统] 战斗胜利！";
+            GD.Print(msg);
+            EventBus.Instance?.EmitNotificationRequested(msg);
+            
+            GameRoot.Instance?.MapSystem?.CompleteCurrentRoom();
+            
+            // 如果完成了房间（比如Boss），系统可能抛出了FloorCompleted，UIManager会自动处理楼层结束界面。
+            // 否则退回地图
+            if (CurrentState == GameEnums.GameState.Combat)
+            {
+                ChangeState(GameEnums.GameState.MapExploration);
+            }
+        }
+        else
+        {
+            // 如果玩家输了而且尚未GameOver（正常在生命归0时就GameOver了），我们兜底判断一次
+            if (CurrentState != GameEnums.GameState.GameOver)
+            {
+                GameOver(false);
+            }
+        }
     }
     
     private void OnCropHarvested(string cropId, int plotIndex, CropReward reward)

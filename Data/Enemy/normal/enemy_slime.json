@@ -1,0 +1,11 @@
+{
+  "Id": "enemy_slime",
+  "Name": "史莱姆",
+  "Health": 30,
+  "Attack": 5,
+  "Defense": 0,
+  "AiPattern": ["Attack", "Defend", "Attack"],
+  "RewardGold": 15,
+  "RewardExp": 10,
+  "RewardItems": ["item_slime_fluid"]
+}

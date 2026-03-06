@@ -23,6 +23,7 @@ public partial class EventBus : Node
 	public event Action<int> PlayerDamaged; // damage
 	public event Action<string, int> EnemyDamaged; // enemyId, damage
 	public event Action<string> EnemyDefeated; // enemyId
+	public event Action<string> BossDefeated; // enemyId
 	public event Action<bool> CombatEnded; // playerWon
 	
 	// 农场事件
@@ -39,10 +40,14 @@ public partial class EventBus : Node
 	public event Action<RoomData> RoomEntered;
 	public event Action<int> FloorCompleted; // floorNumber
 	public event Action<RewardData> RewardSelected;
+	public event Action<string> NotificationRequested; // message
+	public event Action<string> CenterPopupRequested; // center screen message
+	public event Action MapVisualsUpdateRequested; // request UI to update map
 	
 	// 末影箱事件
 	public event Action<EnderChestData> EnderChestOpened; // 末影箱打开
 	public event Action<string, float> CropSelectedFromChest; // cropId, costValue
+    public event Action EnderChestClosed; // 末影箱关闭
 	
 	// 战斗物资事件
 	public event Action<Dictionary<string, int>> CombatResourcesGenerated; // 战斗物资生成
@@ -52,6 +57,9 @@ public partial class EventBus : Node
 	public event Action<GameEnums.PlayerStatType, float> StatUpdated;
 	public event Action<string> ItemCollected; // itemId
 	public event Action<string> CardAddedToDeck; // cardId
+
+	// 存档加载完成事件
+	public event Action LoadCompleted;
 	
 	public override void _Ready()
 	{
@@ -101,6 +109,11 @@ public partial class EventBus : Node
 	{
 		EnemyDefeated?.Invoke(enemyId);
 	}
+
+	public void EmitBossDefeated(string enemyId)
+	{
+		BossDefeated?.Invoke(enemyId);
+	}
 	
 	public void EmitCropPlanted(string cropId, int plotIndex)
 	{
@@ -127,9 +140,24 @@ public partial class EventBus : Node
 		RewardSelected?.Invoke(reward);
 	}
 	
+	public void EmitNotificationRequested(string message)
+	{
+		NotificationRequested?.Invoke(message);
+	}
+	
+	public void EmitCenterPopupRequested(string message)
+	{
+		CenterPopupRequested?.Invoke(message);
+	}
+	
 	public void EmitStatUpdated(GameEnums.PlayerStatType statType, float value)
 	{
 		StatUpdated?.Invoke(statType, value);
+	}
+	
+	public void EmitMapVisualsUpdateRequested()
+	{
+	    MapVisualsUpdateRequested?.Invoke();
 	}
 	
 	public void EmitCardAddedToDeck(string cardId)
@@ -177,6 +205,16 @@ public partial class EventBus : Node
 		CropSelectedFromChest?.Invoke(cropId, costValue);
 	}
 
+	public void EmitEnderChestClosed()
+	{
+		EnderChestClosed?.Invoke();
+	}
+
+	public void EmitLoadCompleted()
+	{
+		LoadCompleted?.Invoke();
+	}
+
 	public void EmitCombatEnded(bool playerWon)
 	{
 		CombatEnded?.Invoke(playerWon);
@@ -204,32 +242,26 @@ public partial class EventBus : Node
 
 	public void StartCombatRoom(RoomData room)
 	{
-		throw new NotImplementedException();
-	}
-
-	public void StartEventRoom(RoomData room)
-	{
-		throw new NotImplementedException();
-	}
-
-	public void StartShopRoom(RoomData room)
-	{
-		throw new NotImplementedException();
-	}
-
-	public void StartRestRoom(RoomData room)
-	{
-		throw new NotImplementedException();
+		// Safe default: notify that a combat room was entered. GameManager is already subscribed to RoomEntered
+		NotificationRequested?.Invoke($"进入战斗房间: {room.Id}");
 	}
 
 	public void StartBossRoom(RoomData room)
 	{
-		throw new NotImplementedException();
+		// Safe default: notify that a boss room was entered
+		NotificationRequested?.Invoke($"进入Boss房间: {room.Id}");
 	}
 
-	public void StartFarmingRoom(RoomData room)
+	public void StartRewardRoom(RoomData room)
 	{
-		throw new NotImplementedException();
+		// Safe default: notify that a reward room was entered
+		NotificationRequested?.Invoke($"进入奖励房间: {room.Id}");
+	}
+
+	public void StartTrapRoom(RoomData room)
+	{
+		// Safe default: notify that a trap room was entered
+		NotificationRequested?.Invoke($"进入陷阱房间: {room.Id}");
 	}
 
 	

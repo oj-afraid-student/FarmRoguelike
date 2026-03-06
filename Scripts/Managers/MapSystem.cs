@@ -68,7 +68,7 @@ public partial class MapSystem : Node
     {
         // 起点房间
         if (position == new Vector2I(0, 0))
-            return GameEnums.RoomType.Rest;
+            return GameEnums.RoomType.Reward;
         
         // Boss房间
         if (position == bossPosition)
@@ -78,11 +78,9 @@ public partial class MapSystem : Node
         var rand = new Random();
         var weights = new Dictionary<GameEnums.RoomType, float>
         {
-            [GameEnums.RoomType.Combat] = 0.5f,
-            [GameEnums.RoomType.Event] = 0.2f,
-            [GameEnums.RoomType.Shop] = 0.1f,
-            [GameEnums.RoomType.Rest] = 0.1f,
-            [GameEnums.RoomType.Farming] = 0.1f
+            [GameEnums.RoomType.Combat] = 0.6f,
+            [GameEnums.RoomType.Reward] = 0.2f,
+            [GameEnums.RoomType.Trap] = 0.2f
         };
         
         // 根据层数调整权重
@@ -130,20 +128,14 @@ public partial class MapSystem : Node
             case GameEnums.RoomType.Combat:
                 GameRoot.Instance.EventBus.StartCombatRoom(room);
                 break;
-            case GameEnums.RoomType.Event:
-                GameRoot.Instance.EventBus.StartEventRoom(room);
-                break;
-            case GameEnums.RoomType.Shop:
-                GameRoot.Instance.EventBus.StartShopRoom(room);
-                break;
-            case GameEnums.RoomType.Rest:
-                GameRoot.Instance.EventBus.StartRestRoom(room);
-                break;
             case GameEnums.RoomType.Boss:
                 GameRoot.Instance.EventBus.StartBossRoom(room);
                 break;
-            case GameEnums.RoomType.Farming:
-                GameRoot.Instance.EventBus.StartFarmingRoom(room);
+            case GameEnums.RoomType.Reward:
+                GameRoot.Instance.EventBus.StartRewardRoom(room);
+                break;
+            case GameEnums.RoomType.Trap:
+                GameRoot.Instance.EventBus.StartTrapRoom(room);
                 break;
         }
     }

@@ -13,37 +13,45 @@ public partial class CombatSystem : Node2D
 	private EventBus _eventBus;
 	private PlayerData _playerData;
 	
+	public string CurrentEnemyId => _currentEnemyId;
+	public int CurrentEnemyHealth => _currentEnemyHealth;
+	public int CurrentEnemyMaxHealth => _currentEnemyMaxHealth;
+	public IReadOnlyList<string> PlayerHand => _playerHand;
+	
 	private string _currentEnemyId;
 	private int _currentEnemyHealth = 100;
 	private int _currentEnemyMaxHealth = 100;
 	private int _currentEnemyAttack = 10;
+	private int _currentEnemyDefense = 0;
+	private int _enemyAiStateIndex = 0;
+	
+	private int _enemyPoisonStacks = 0;
+	private int _nextAttackDamageBonus = 0;
+
+	private Dictionary<string, CombatStatusRuntime> _playerStatuses = new();
+	private Dictionary<string, CombatStatusRuntime> _enemyStatuses = new();
+	private int _playerExciteDrawCountThisTurn = 0;
 	
 	private bool _isPlayerTurn = true;
-	private int _playerActionPoints = 3;
+	private int _playerEnergy = 3;
 	private int _playerDefenseThisTurn = 0;
-
-	// 抽牌 / 手牌相关
-	private const int MaxHandSize = 5;
-	private const int DrawsPerTurn = 4; // 每回合最多主动抽牌次数
-	private int _drawsRemainingThisTurn = 0;
-
-	// 持续效果
-	private int _nextAttackBonusDamage = 0;     // 下一个攻击牌额外伤害
-	private int _enemyPoisonStacks = 0;         // 中毒层数
-	private int _enemyPoisonTurnsRemaining = 0; // 中毒剩余回合数
 	
 	private List<string> _playerHand = new List<string>();
 	private List<string> _playerDrawPile = new List<string>();
 	private List<string> _playerDiscardPile = new List<string>();
+
+	private class CombatStatusRuntime
+	{
+		public string Id;
+		public int Stacks;
+		public int RemainingTurns;
+	}
 	
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
-		// 优先从 GameRoot 单例获取管理器，其次从 Autoload 根节点获取
-		_gameManager = GameRoot.Instance?.GameManager 
-					   ?? GetNodeOrNull<GameManager>("/root/GameManager");
-		_eventBus = GameRoot.Instance?.EventBus 
-					?? GetNodeOrNull<EventBus>("/root/EventBus");
+		_gameManager = GameRoot.Instance?.GameManager;
+		_eventBus = GameRoot.Instance?.EventBus;
 		
 		if (_gameManager != null)
 		{
@@ -70,22 +78,60 @@ public partial class CombatSystem : Node2D
 	
 	public void StartCombat(string enemyId)
 	{
+		if (_gameManager != null)
+		{
+			_playerData = _gameManager.PlayerData;
+		}
+		
 		_currentEnemyId = enemyId;
 		_isPlayerTurn = true;
-		_playerActionPoints = _playerData?.ActionPoints ?? 3;
+		_playerEnergy = 3;
 		_playerDefenseThisTurn = 0;
-		_drawsRemainingThisTurn = DrawsPerTurn;
+		_enemyAiStateIndex = 0;
+		_enemyPoisonStacks = 0;
+		_nextAttackDamageBonus = 0;
+		_playerStatuses.Clear();
+		_enemyStatuses.Clear();
+		_playerExciteDrawCountThisTurn = 0;
 		
-		// 初始化敌人属性（这里简单设置，实际应从数据加载）
-		_currentEnemyHealth = 100;
-		_currentEnemyMaxHealth = 100;
-		_currentEnemyAttack = 10;
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager != null)
+		{
+			var enemyData = dataManager.GetEnemy(enemyId);
+			if (enemyData != null)
+			{
+				_currentEnemyMaxHealth = enemyData.Health;
+				_currentEnemyHealth = enemyData.Health;
+				_currentEnemyAttack = enemyData.Attack;
+				_currentEnemyDefense = enemyData.Defense;
+			}
+			else
+			{
+				GD.PrintErr($"未能找到敌人数据: {enemyId}，使用默认回退数值");
+				_currentEnemyHealth = 100;
+				_currentEnemyMaxHealth = 100;
+				_currentEnemyAttack = 10;
+				_currentEnemyDefense = 0;
+			}
+		}
+		else
+		{
+			GD.PrintErr("未找到 DataManager 节点。使用默认配置。");
+			_currentEnemyHealth = 100;
+			_currentEnemyMaxHealth = 100;
+			_currentEnemyAttack = 10;
+			_currentEnemyDefense = 0;
+		}
 		
 		// 初始化玩家卡组
 		InitializePlayerDeck();
 		
+		// 抽起始手牌
+		DrawStartingHand();
+
+		ApplyNextBattleStatusFromPermanentUpgrades();
+		
 		EmitSignal(SignalName.CombatStarted, enemyId);
-		_eventBus.EmitCombatStarted(enemyId);
 		
 		GD.Print($"战斗开始！敌人: {enemyId}");
 	}
@@ -120,6 +166,16 @@ public partial class CombatSystem : Node2D
 		}
 	}
 	
+	private void DrawStartingHand()
+	{
+		int cardsToDraw = 4;
+		
+		for (int i = 0; i < cardsToDraw; i++)
+		{
+			DrawCard();
+		}
+	}
+	
 	private void DrawCard()
 	{
 		if (_playerDrawPile.Count == 0)
@@ -145,7 +201,7 @@ public partial class CombatSystem : Node2D
 	
 	public void PlayCard(string cardId, string targetId = "")
 	{
-		if (!_isPlayerTurn || _playerActionPoints <= 0)
+		if (!_isPlayerTurn || _playerEnergy <= 0)
 		{
 			GD.Print("现在不能出牌");
 			return;
@@ -156,20 +212,45 @@ public partial class CombatSystem : Node2D
 			GD.Print($"手牌中没有卡牌: {cardId}");
 			return;
 		}
+
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager == null) return;
+		var cardData = dataManager.GetCard(cardId);
+		if (cardData == null) return;
+
+		if (_playerEnergy < cardData.Cost)
+		{
+			GD.Print($"能量不足，需要 {cardData.Cost} 能量");
+			return;
+		}
+
+		if (HasStatus(_playerStatuses, "silence") && cardData.Type != GameEnums.CardType.Attack)
+		{
+			GD.Print("沉默状态下不能使用技能/能力牌");
+			return;
+		}
+
+		if (HasStatus(_playerStatuses, "disarm") && cardData.Type == GameEnums.CardType.Attack)
+		{
+			GD.Print("缴械状态下不能使用攻击牌");
+			return;
+		}
 		
 		_playerHand.Remove(cardId);
 		_playerDiscardPile.Add(cardId);
-		_playerActionPoints--;
+		_playerEnergy -= cardData.Cost;
 		
 		// 处理卡牌效果
 		ProcessCardEffect(cardId, targetId);
+
+		ApplyStatusAfterPlayCard();
 		
 		_eventBus.EmitCardPlayed(cardId, targetId);
 		
-		GD.Print($"玩家打出卡牌: {cardId}，剩余行动点: {_playerActionPoints}");
+		GD.Print($"玩家打出卡牌: {cardId}，剩余能量: {_playerEnergy}");
 		
-		// 如果玩家没有行动点了，结束回合
-		if (_playerActionPoints <= 0)
+		// 如果玩家没有能量了，结束回合
+		if (_playerEnergy <= 0)
 		{
 			EndPlayerTurn();
 		}
@@ -177,93 +258,124 @@ public partial class CombatSystem : Node2D
 	
 	private void ProcessCardEffect(string cardId, string targetId)
 	{
-		// 根据卡牌ID处理不同效果
-		switch (cardId)
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager == null)
 		{
-			case "card_scythe_slash": // 镰刀挥砍：造成 7 点伤害（目前不叠加攻击力，数值与策划一致）
-			{
-				int baseDamage = 7;
-				int damage = baseDamage + _nextAttackBonusDamage;
-				_nextAttackBonusDamage = 0;
-				ApplyDamageToEnemy(damage);
-				break;
-			}
+			GD.PrintErr("处理卡牌效果失败：未找到 DataManager");
+			return;
+		}
 
-			case "card_hoe_smash": // 锄头猛击：12 伤害 + 获得 1 行动点
-			{
-				int baseDamage = 12;
-				int damage = baseDamage + _nextAttackBonusDamage;
-				_nextAttackBonusDamage = 0;
-				ApplyDamageToEnemy(damage);
-				_playerActionPoints += 1;
-				GD.Print("锄头猛击：获得 1 点行动力");
-				break;
-			}
+		var cardData = dataManager.GetCard(cardId);
+		if (cardData == null)
+		{
+			GD.PrintErr($"未能找到卡牌数据: {cardId}");
+			return;
+		}
 
-			case "card_raise_tools": // 架起农具：获得 6 点护盾（本回合）
-			{
-				int block = 6;
-				_playerDefenseThisTurn += block;
-				GD.Print($"获得 {block} 点护盾，当前护盾: {_playerDefenseThisTurn}");
-				break;
-			}
+		if (cardData.Effects == null || cardData.Effects.Count == 0)
+		{
+			GD.Print($"卡牌 {cardData.Name} 没有配置任何效果。");
+			return;
+		}
 
-			case "card_emergency_bandage": // 紧急包扎：回复 4 点生命
+		foreach (var effect in cardData.Effects)
+		{
+			switch (effect.Key.ToLower())
 			{
-				if (_playerData != null)
-				{
-					int heal = 4;
-					_playerData.CurrentHealth = Math.Min(_playerData.MaxHealth, _playerData.CurrentHealth + heal);
-					GD.Print($"紧急包扎：回复 {heal} 点生命，当前生命: {_playerData.CurrentHealth}/{_playerData.MaxHealth}");
-				}
+				case "damage":
+					int damage = (int)effect.Value + (_playerData?.Attack ?? 0) + _nextAttackDamageBonus;
+					_nextAttackDamageBonus = 0; // 消耗Buff
+					ApplyDamageToEnemy(damage);
+					break;
+					
+				case "defense":
+				case "block":
+					int defense = (int)effect.Value + (_playerData?.Defense ?? 0);
+					_playerDefenseThisTurn += defense;
+					GD.Print($"获得 {defense} 点护甲，当前护甲: {_playerDefenseThisTurn}");
+					break;
+					
+				case "weakness":
+					int weakAmount = (int)effect.Value;
+					_currentEnemyAttack = Math.Max(0, _currentEnemyAttack - weakAmount);
+					GD.Print($"敌人攻击力降低了 {weakAmount}点，当前攻击力: {_currentEnemyAttack}");
+					break;
+					
+				case "restore_energy":
+					_playerEnergy += (int)effect.Value;
+					GD.Print($"回复了 {(int)effect.Value} 点能量，当前能量: {_playerEnergy}");
+					break;
+					
+				case "heal":
+					if (_gameManager != null)
+					{
+						_gameManager.HealPlayer((int)effect.Value);
+						GD.Print($"恢复了 {(int)effect.Value} 点生命值");
+					}
+					break;
+					
+				case "poison_stacks":
+				ApplyStatus(_enemyStatuses, "poison", (int)effect.Value, 3);
+				_enemyPoisonStacks = GetStatusStacks(_enemyStatuses, "poison");
+				GD.Print($"施加了 {(int)effect.Value} 层中毒，当前层数: {_enemyPoisonStacks}");
 				break;
-			}
 
-			case "card_spray_pesticide": // 喷农药：施加 1 层中毒，持续 2 回合
-			{
-				_enemyPoisonStacks += 1;
-				_enemyPoisonTurnsRemaining = Math.Max(_enemyPoisonTurnsRemaining, 2);
-				GD.Print($"喷农药：敌人获得 1 层中毒，持续 {_enemyPoisonTurnsRemaining} 回合");
+			case "strength":
+				ApplyStatus(_playerStatuses, "strength", (int)effect.Value, 1);
 				break;
-			}
 
-			case "card_observe_weakness": // 观察弱点：抽 1 张牌，下张攻击牌伤害 +4
-			{
-				DrawCard();
-				_nextAttackBonusDamage += 4;
-				GD.Print("观察弱点：抽 1 张牌，下一个攻击牌伤害 +4");
+			case "ironwall":
+				ApplyStatus(_playerStatuses, "ironwall", (int)effect.Value, 2);
 				break;
-			}
 
-			// 兼容旧测试卡牌 ID（如果其它地方还在用）
-			case "card_attack_basic":
-			{
-				int damage = 6;
-				ApplyDamageToEnemy(damage);
+			case "lifesteal":
+				ApplyStatus(_playerStatuses, "lifesteal", 1, 2);
 				break;
+					
+				case "draw":
+					for (int i = 0; i < (int)effect.Value; i++)
+					{
+						DrawCard();
+					}
+					break;
+					
+				case "buff_next_attack":
+					_nextAttackDamageBonus += (int)effect.Value;
+					GD.Print($"获得下一击伤害Buff: +{(int)effect.Value}");
+					break;
+					
+				default:
+					GD.Print($"未处理的卡牌效果键名: {effect.Key}");
+					break;
 			}
-			case "card_defend_basic":
-			{
-				int defense = 5 + (_playerData?.Defense ?? 0);
-				_playerDefenseThisTurn += defense;
-				GD.Print($"获得 {defense} 点护甲，当前护甲: {_playerDefenseThisTurn}");
-				break;
-			}
-			case "card_skill_weakness":
-			{
-				_currentEnemyAttack = Math.Max(5, _currentEnemyAttack - 3);
-				GD.Print($"敌人攻击力降低，当前攻击力: {_currentEnemyAttack}");
-				break;
-			}
-				
-			default:
-				GD.Print($"未知卡牌效果: {cardId}");
-				break;
 		}
 	}
 	
 	private void ApplyDamageToEnemy(int damage)
 	{
+		int modifiedDamage = ApplyOutgoingDamageModifiers(damage, _playerStatuses);
+		modifiedDamage = ApplyIncomingDamageModifiers(modifiedDamage, _enemyStatuses);
+
+		bool ignoreDefense = HasStatus(_playerStatuses, "precision");
+		int enemyDefense = GetEffectiveEnemyDefense();
+		int actualDamage = ignoreDefense ? Math.Max(1, modifiedDamage) : Math.Max(1, modifiedDamage - enemyDefense);
+		_currentEnemyHealth -= actualDamage;
+
+		ApplyLifestealIfAny(actualDamage);
+		
+		if (_currentEnemyHealth <= 0)
+		{
+			_currentEnemyHealth = 0;
+			EnemyDefeated();
+		}
+		
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, actualDamage);
+		GD.Print($"对敌人造成 {actualDamage} 点伤害（包含护甲减免），敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+	}
+	
+	private void ApplyPoisonDamageToEnemy(int damage)
+	{
+		damage = ApplyIncomingDamageModifiers(damage, _enemyStatuses);
 		_currentEnemyHealth -= damage;
 		
 		if (_currentEnemyHealth <= 0)
@@ -273,7 +385,7 @@ public partial class CombatSystem : Node2D
 		}
 		
 		_eventBus.EmitEnemyDamaged(_currentEnemyId, damage);
-		GD.Print($"对敌人造成 {damage} 点伤害，敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+		GD.Print($"毒素对敌人造成 {damage} 点真实伤害，敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
 	}
 	
 	private void EnemyDefeated()
@@ -290,20 +402,66 @@ public partial class CombatSystem : Node2D
 	
 	private void GiveCombatReward()
 	{
-		// 简单奖励：金币和经验
-		if (_playerData != null)
+		if (_playerData == null) return;
+
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		if (dataManager != null)
 		{
-			int goldReward = 20;
-			_playerData.Gold += goldReward;
-			GD.Print($"获得 {goldReward} 金币");
+			var enemyData = dataManager.GetEnemy(_currentEnemyId);
+			if (enemyData != null)
+			{
+				int goldReward = enemyData.RewardGold;
+				_playerData.Gold += goldReward;
+				
+				GD.Print($"战斗胜利！获得 {goldReward} 金币，{enemyData.RewardExp} 经验。");
+				
+				foreach(var item in enemyData.RewardItems)
+				{
+					GD.Print($"掉落物品: {item}");
+					// 如果Inventory有实现Add接口即可类似处理，暂打印：
+					// if (_playerData.Inventory.ContainsKey(item)) _playerData.Inventory[item]++; 
+					// else _playerData.Inventory[item] = 1;
+				}
+			}
+			else
+			{
+				// 未获取到敌人数据，保底奖励
+				_playerData.Gold += 20;
+				GD.Print("获得 20 金币 (Fallback)");
+			}
+		}
+		else
+		{
+			// GameManager的 fallback
+			_playerData.Gold += 20;
+			GD.Print("获得 20 金币 (Fallback)");
+		}
+	}
+	
+	public void EndPlayerTurnEarly()
+	{
+		if (_isPlayerTurn)
+		{
+			EndPlayerTurn();
 		}
 	}
 	
 	private void EndPlayerTurn()
 	{
+		ProcessTurnEndStatuses(isPlayer: true);
 		_isPlayerTurn = false;
 		_eventBus.EmitTurnEnded();
 		GD.Print("玩家回合结束");
+		
+		// 回合结束，弃掉所有手牌
+		foreach (var card in _playerHand)
+		{
+			_playerDiscardPile.Add(card);
+		}
+		_playerHand.Clear();
+		GD.Print("弃置手牌完毕");
+		// 呼叫一次UI刷新，让结束回合后的手牌消失
+		_eventBus.EmitCardPlayed("", ""); // 借用CardPlayed或者直接写一个UpdateHand的信号，或者直接等待敌人回合结束重新抽牌
 		
 		// 开始敌人回合
 		StartEnemyTurn();
@@ -313,23 +471,24 @@ public partial class CombatSystem : Node2D
 	{
 		GD.Print("敌人回合开始");
 
-		// 中毒在敌人回合开始时结算
-		if (_enemyPoisonStacks > 0 && _enemyPoisonTurnsRemaining > 0)
-		{
-			int poisonDamage = _enemyPoisonStacks * 2; // 每层每回合 2 点伤害，可根据策划调整
-			ApplyDamageToEnemy(poisonDamage);
-			_enemyPoisonTurnsRemaining--;
-			GD.Print($"中毒结算：对敌人造成 {poisonDamage} 点伤害，还剩 {_enemyPoisonTurnsRemaining} 回合");
+		ProcessTurnStartStatuses(isPlayer: false);
 
-			if (_enemyPoisonTurnsRemaining <= 0)
-			{
-				_enemyPoisonStacks = 0;
-				GD.Print("中毒效果结束");
-			}
+		if (_currentEnemyHealth <= 0)
+		{
+			return; // 敌人被毒死，回合中止
+		}
+
+		if (TryConsumeSkipTurn(_enemyStatuses))
+		{
+			GD.Print("敌人因控制效果跳过行动");
+			ProcessTurnEndStatuses(isPlayer: false);
+			StartPlayerTurn();
+			return;
 		}
 		
 		// 敌人攻击玩家
 		EnemyAttack();
+		ProcessTurnEndStatuses(isPlayer: false);
 		
 		// 敌人回合结束后开始玩家回合
 		StartPlayerTurn();
@@ -337,49 +496,102 @@ public partial class CombatSystem : Node2D
 	
 	private void EnemyAttack()
 	{
-		int damage = _currentEnemyAttack;
-		
-		// 应用玩家护甲
-		int actualDamage = Math.Max(0, damage - _playerDefenseThisTurn);
-		
-		if (actualDamage > 0)
+		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
+		List<string> aiPattern = null;
+
+		if (dataManager != null)
 		{
-			if (_gameManager != null)
+			var enemyData = dataManager.GetEnemy(_currentEnemyId);
+			if (enemyData != null)
 			{
-				_gameManager.ApplyDamageToPlayer(actualDamage);
-			}
-			else
-			{
-				GD.Print($"敌人对玩家造成 {actualDamage} 点伤害");
+				aiPattern = enemyData.AiPattern;
 			}
 		}
-		else
+
+		if (aiPattern == null || aiPattern.Count == 0)
 		{
-			GD.Print("玩家的护甲完全抵挡了敌人的攻击");
+			// 如果没有AI列表，默认只攻击
+			aiPattern = new List<string> { "Attack" };
 		}
 		
-		// 重置本回合护甲
+		// 重置当前怪物的护甲值(可调整为不每回合重置，由具体游戏设计决定，此处配合防御动作通常只在本回合生效处理)
+		_currentEnemyDefense = 0;
+
+		string currentAction = aiPattern[_enemyAiStateIndex % aiPattern.Count];
+		_enemyAiStateIndex++;
+
+		GD.Print($"敌人执行动作: {currentAction}");
+
+		switch (currentAction.ToLower())
+		{
+			case "attack":
+					int damage = ApplyOutgoingDamageModifiers(_currentEnemyAttack, _enemyStatuses);
+					damage = ApplyIncomingDamageModifiers(damage, _playerStatuses);
+				// 应用玩家护甲
+				int actualDamage = Math.Max(0, damage - _playerDefenseThisTurn);
+				
+				if (actualDamage > 0)
+				{
+					if (_gameManager != null)
+					{
+						_gameManager.ApplyDamageToPlayer(actualDamage);
+					}
+					else
+					{
+						GD.Print($"敌人对玩家造成 {actualDamage} 点伤害");
+					}
+				}
+				else
+				{
+					GD.Print("玩家的护甲完全抵挡了敌人的攻击");
+				}
+
+					TryReflectDamage(actualDamage);
+				break;
+			
+			case "defend":
+				// 假设敌防时获得额外防御值
+				_currentEnemyDefense += 5;
+				GD.Print($"敌人采取防御姿态，获得 {_currentEnemyDefense} 点护甲。");
+				break;
+
+			case "debuff":
+				// 对玩家施加减益(这里简化为减少1手牌或直接清空本回合部分护甲状态等)
+				GD.Print("敌人施放减益魔法，干扰玩家。");
+				// 具体debuff可直接抛出事件由 GameManager/Player 处理，例如 _eventBus.EmitPlayerDebuffed()
+				break;
+
+			default:
+				GD.Print($"未知的敌人行动: {currentAction}");
+				break;
+		}
+		
+		// 重置玩家本回合护甲
 		_playerDefenseThisTurn = 0;
 	}
 	
 	private void StartPlayerTurn()
 	{
 		_isPlayerTurn = true;
-		_playerActionPoints = _playerData?.ActionPoints ?? 3; // 重置行动点
-		_drawsRemainingThisTurn = DrawsPerTurn;               // 重置本回合可抽牌次数
+		_playerEnergy = 3; // 重置能量
+		_playerExciteDrawCountThisTurn = 0;
+		ProcessTurnStartStatuses(isPlayer: true);
 
-		// 若抽牌堆已空，将弃牌堆洗回抽牌堆，保证本回合能抽牌
-		if (_playerDrawPile.Count == 0 && _playerDiscardPile.Count > 0)
+		if (TryConsumeSkipTurn(_playerStatuses))
 		{
-			foreach (var card in _playerDiscardPile)
-				_playerDrawPile.Add(card);
-			_playerDiscardPile.Clear();
-			ShuffleDeck(_playerDrawPile);
-			GD.Print("弃牌堆洗入抽牌堆");
+			GD.Print("玩家因控制效果跳过本回合");
+			EndPlayerTurn();
+			return;
+		}
+		
+		// 抽牌 改为每回合抽 4 张
+		for (int i = 0; i < 4; i++)
+		{
+			DrawCard();
 		}
 		
 		_eventBus.EmitPlayerTurnStarted();
-		GD.Print("玩家回合开始，可以通过点击牌堆抽牌");
+		GD.Print("玩家回合开始，抽4张牌");
 	}
 	
 	public void EndCombat(bool playerWon)
@@ -391,11 +603,8 @@ public partial class CombatSystem : Node2D
 	// 事件处理
 	private void OnCombatStarted(string enemyId)
 	{
-		// 如果这不是当前战斗系统触发的战斗，可以重新初始化
-		if (_currentEnemyId != enemyId)
-		{
-			StartCombat(enemyId);
-		}
+		// 每次进入战斗都必须重新初始化，即使是同一种敌人 (否则上一次归零的血量保留)
+		StartCombat(enemyId);
 	}
 	
 	private void OnCardPlayed(string cardId, string targetId)
@@ -426,55 +635,20 @@ public partial class CombatSystem : Node2D
 	{
 		return new List<string>(_playerHand);
 	}
-
-	/// <summary>玩家尝试通过点击牌堆抽 1 张牌（受每回合次数与手牌上限限制）</summary>
-	public bool TryDrawCard()
+	
+	public int GetPlayerEnergy()
 	{
-		if (!_isPlayerTurn)
-		{
-			GD.Print("现在不是玩家回合，不能抽牌");
-			return false;
-		}
-
-		if (_drawsRemainingThisTurn <= 0)
-		{
-			GD.Print("本回合抽牌次数已用完");
-			return false;
-		}
-
-		if (_playerHand.Count >= MaxHandSize)
-		{
-			GD.Print("手牌已达上限，不能继续抽牌");
-			return false;
-		}
-
-		// 牌堆为 0 时不允许抽牌（不在这里洗入弃牌堆，回合开始时再洗）
-		if (_playerDrawPile.Count == 0)
-		{
-			GD.Print("牌堆已空，无法抽牌");
-			return false;
-		}
-
-		DrawCard();
-		_drawsRemainingThisTurn--;
-		return true;
+		return _playerEnergy;
 	}
 
-	/// <summary>抽牌堆剩余张数（供战斗UI显示）</summary>
 	public int GetDrawPileCount()
 	{
 		return _playerDrawPile.Count;
 	}
 
-	/// <summary>弃牌堆张数（供战斗UI显示）</summary>
 	public int GetDiscardPileCount()
 	{
 		return _playerDiscardPile.Count;
-	}
-	
-	public int GetPlayerActionPoints()
-	{
-		return _playerActionPoints;
 	}
 	
 	public (int current, int max) GetEnemyHealth()
@@ -482,8 +656,202 @@ public partial class CombatSystem : Node2D
 		return (_currentEnemyHealth, _currentEnemyMaxHealth);
 	}
 	
+    // 返回玩家本回合的护甲/防御值（UI 显示用）
+    public int GetPlayerDefense()
+    {
+        return _playerDefenseThisTurn;
+    }
+
 	public bool IsPlayerTurn()
 	{
 		return _isPlayerTurn;
+	}
+
+	private void ApplyStatus(Dictionary<string, CombatStatusRuntime> targetStatuses, string statusId, int stacks, int duration)
+	{
+		if (stacks <= 0) return;
+		var data = GetStatusData(statusId);
+		if (targetStatuses.TryGetValue(statusId, out var status))
+		{
+			if (data != null && data.MaxStacks > 0)
+			{
+				status.Stacks = Math.Min(data.MaxStacks, status.Stacks + stacks);
+			}
+			else
+			{
+				status.Stacks += stacks;
+			}
+			status.RemainingTurns = Math.Max(status.RemainingTurns, duration);
+		}
+		else
+		{
+			targetStatuses[statusId] = new CombatStatusRuntime
+			{
+				Id = statusId,
+				Stacks = data != null && data.MaxStacks > 0 ? Math.Min(data.MaxStacks, stacks) : stacks,
+				RemainingTurns = duration
+			};
+		}
+	}
+
+	private bool HasStatus(Dictionary<string, CombatStatusRuntime> targetStatuses, string statusId)
+	{
+		return targetStatuses.TryGetValue(statusId, out var status) && status.Stacks > 0;
+	}
+
+	private int GetStatusStacks(Dictionary<string, CombatStatusRuntime> targetStatuses, string statusId)
+	{
+		return targetStatuses.TryGetValue(statusId, out var status) ? status.Stacks : 0;
+	}
+
+	private StatusEffectData GetStatusData(string statusId)
+	{
+		var dm = GetNodeOrNull<DataManager>("/root/DataManager");
+		return dm?.GetStatusEffect(statusId);
+	}
+
+	private int ApplyOutgoingDamageModifiers(int baseDamage, Dictionary<string, CombatStatusRuntime> attackerStatuses)
+	{
+		int damage = baseDamage;
+		damage += GetStatusStacks(attackerStatuses, "strength") * 3;
+		damage = Mathf.RoundToInt(damage * (1.0f - 0.1f * GetStatusStacks(attackerStatuses, "weak")));
+		return Math.Max(0, damage);
+	}
+
+	private int ApplyIncomingDamageModifiers(int baseDamage, Dictionary<string, CombatStatusRuntime> defenderStatuses)
+	{
+		int damage = Mathf.RoundToInt(baseDamage * (1.0f + 0.2f * GetStatusStacks(defenderStatuses, "vulnerable")));
+		return Math.Max(0, damage);
+	}
+
+	private int GetEffectiveEnemyDefense()
+	{
+		float defense = _currentEnemyDefense;
+		defense *= (1.0f + 0.5f * GetStatusStacks(_enemyStatuses, "ironwall"));
+		defense *= Math.Max(0.1f, 1.0f - 0.2f * GetStatusStacks(_enemyStatuses, "armor_break"));
+		return Math.Max(0, Mathf.RoundToInt(defense));
+	}
+
+	private void ApplyLifestealIfAny(int dealtDamage)
+	{
+		if (!HasStatus(_playerStatuses, "lifesteal") || _gameManager == null) return;
+		int healAmount = Math.Max(1, Mathf.RoundToInt(dealtDamage * 0.2f));
+		_gameManager.HealPlayer(healAmount);
+	}
+
+	private void TryReflectDamage(int actualDamageToPlayer)
+	{
+		if (actualDamageToPlayer <= 0) return;
+		if (!HasStatus(_playerStatuses, "reflect")) return;
+		ApplyPoisonDamageToEnemy(3);
+	}
+
+	private void ApplyStatusAfterPlayCard()
+	{
+		if (HasStatus(_playerStatuses, "curse") && _gameManager != null)
+		{
+			int curseDamage = 2 * Math.Max(1, GetStatusStacks(_playerStatuses, "curse"));
+			_gameManager.ApplyDamageToPlayer(curseDamage);
+		}
+
+		if (HasStatus(_playerStatuses, "excite") && _playerExciteDrawCountThisTurn < 2)
+		{
+			DrawCard();
+			_playerExciteDrawCountThisTurn++;
+		}
+	}
+
+	private bool TryConsumeSkipTurn(Dictionary<string, CombatStatusRuntime> statuses)
+	{
+		if (HasStatus(statuses, "stun"))
+		{
+			statuses.Remove("stun");
+			return true;
+		}
+		if (HasStatus(statuses, "freeze"))
+		{
+			var rng = new Random();
+			if (rng.NextDouble() <= 0.2)
+			{
+				statuses.Remove("freeze");
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void ProcessTurnStartStatuses(bool isPlayer)
+	{
+		var statuses = isPlayer ? _playerStatuses : _enemyStatuses;
+		int maxHealth = isPlayer ? (_playerData?.MaxHealth ?? 100) : _currentEnemyMaxHealth;
+
+		if (HasStatus(statuses, "poison"))
+		{
+			int stacks = GetStatusStacks(statuses, "poison");
+			int damage = Math.Max(1, Mathf.RoundToInt(maxHealth * 0.04f * stacks));
+			if (isPlayer)
+			{
+				_gameManager?.ApplyDamageToPlayer(damage);
+			}
+			else
+			{
+				ApplyPoisonDamageToEnemy(damage);
+			}
+		}
+
+		if (HasStatus(statuses, "vigor") && isPlayer)
+		{
+			int heal = Math.Max(1, 2 * GetStatusStacks(statuses, "vigor"));
+			_gameManager?.HealPlayer(heal);
+		}
+	}
+
+	private void ProcessTurnEndStatuses(bool isPlayer)
+	{
+		var statuses = isPlayer ? _playerStatuses : _enemyStatuses;
+		int maxHealth = isPlayer ? (_playerData?.MaxHealth ?? 100) : _currentEnemyMaxHealth;
+
+		if (HasStatus(statuses, "burn"))
+		{
+			int stacks = GetStatusStacks(statuses, "burn");
+			int damage = Math.Max(1, Mathf.RoundToInt(maxHealth * 0.08f * stacks));
+			if (isPlayer)
+			{
+				_gameManager?.ApplyDamageToPlayer(damage);
+			}
+			else
+			{
+				ApplyPoisonDamageToEnemy(damage);
+			}
+			statuses["burn"].Stacks = Math.Max(0, statuses["burn"].Stacks - 1);
+		}
+
+		var keys = new List<string>(statuses.Keys);
+		foreach (var key in keys)
+		{
+			var status = statuses[key];
+			if (status.RemainingTurns > 0)
+			{
+				status.RemainingTurns--;
+			}
+
+			if (status.Stacks <= 0 || status.RemainingTurns == 0)
+			{
+				statuses.Remove(key);
+			}
+		}
+	}
+
+	private void ApplyNextBattleStatusFromPermanentUpgrades()
+	{
+		if (_playerData?.PermanentUpgrades == null) return;
+		if (_playerData.PermanentUpgrades.TryGetValue("gain_strength_stacks", out var strength) && strength > 0)
+		{
+			ApplyStatus(_playerStatuses, "strength", (int)strength, 1);
+		}
+		if (_playerData.PermanentUpgrades.TryGetValue("gain_ironwall_stacks", out var ironwall) && ironwall > 0)
+		{
+			ApplyStatus(_playerStatuses, "ironwall", (int)ironwall, 2);
+		}
 	}
 }

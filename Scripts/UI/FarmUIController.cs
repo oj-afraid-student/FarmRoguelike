@@ -98,17 +98,45 @@ public partial class FarmUIController : Control
         // 创建地块UI容器
         var plotContainer = new VBoxContainer();
         plotContainer.Name = $"Plot_{plotIndex}";
+        plotContainer.Alignment = BoxContainer.AlignmentMode.Center;
+        plotContainer.AddThemeConstantOverride("separation", 4);
         
-        // 地块按钮
-        var plotButton = new Button();
-        plotButton.Text = $"地块 {plotIndex + 1}";
+        // 地块按钮（带土壤底图）
+        var plotButton = new TextureButton();
+        plotButton.Name = "PlotButton";
+        plotButton.CustomMinimumSize = new Vector2(120, 120);
+        var soilTexture = TryLoadTexture("res://Assets/UI/Farm/slot_soil.png");
+        if (soilTexture != null)
+        {
+            plotButton.TextureNormal = soilTexture;
+            plotButton.StretchMode = TextureButton.StretchModeEnum.KeepAspectCovered;
+        }
         plotButton.Pressed += () => OnPlotClicked(plotIndex);
+
+        // 作物阶段图层（例如 wheat1/wheat2/wheat3）
+        var cropImage = new TextureRect();
+        cropImage.Name = "CropImage";
+        cropImage.Visible = false;
+        cropImage.CustomMinimumSize = new Vector2(72, 72);
+        cropImage.SetAnchorsPreset(Control.LayoutPreset.Center);
+        cropImage.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+        cropImage.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        cropImage.MouseFilter = Control.MouseFilterEnum.Ignore;
+        plotButton.AddChild(cropImage);
+
         plotContainer.AddChild(plotButton);
+
+        var plotIndexLabel = new Label();
+        plotIndexLabel.Name = "PlotIndexLabel";
+        plotIndexLabel.Text = $"地块 {plotIndex + 1}";
+        plotIndexLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        plotContainer.AddChild(plotIndexLabel);
         
         // 作物信息标签
         var cropLabel = new Label();
         cropLabel.Name = "CropLabel";
         cropLabel.Text = "空";
+        cropLabel.HorizontalAlignment = HorizontalAlignment.Center;
         plotContainer.AddChild(cropLabel);
         
         // 生长进度条
@@ -117,6 +145,9 @@ public partial class FarmUIController : Control
         progressBar.MinValue = 0;
         progressBar.MaxValue = 1;
         progressBar.Value = 0;
+        progressBar.CustomMinimumSize = new Vector2(118, 14);
+        progressBar.ShowPercentage = false;
+        ApplyFarmProgressBarStyle(progressBar);
         plotContainer.AddChild(progressBar);
         
         // 操作按钮容器
@@ -165,6 +196,7 @@ public partial class FarmUIController : Control
         // 更新作物信息
         var cropLabel = plotUI.GetNodeOrNull<Label>("CropLabel");
         var progressBar = plotUI.GetNodeOrNull<ProgressBar>("ProgressBar");
+        var cropImage = plotUI.GetNodeOrNull<TextureRect>("PlotButton/CropImage");
         var harvestButton = plotUI.GetNodeOrNull<Button>("ActionContainer/HarvestButton");
         var useResourceButton = plotUI.GetNodeOrNull<Button>("ActionContainer/UseResourceButton");
         
@@ -181,6 +213,13 @@ public partial class FarmUIController : Control
                 if (progressBar != null)
                 {
                     progressBar.Value = plot.GrowthProgress;
+                }
+
+                if (cropImage != null)
+                {
+                    var stageTex = ResolveCropStageTexture(plot.CropId, plot.Stage, plot.GrowthProgress);
+                    cropImage.Texture = stageTex;
+                    cropImage.Visible = stageTex != null;
                 }
                 
                 if (harvestButton != null)
@@ -204,6 +243,12 @@ public partial class FarmUIController : Control
             if (progressBar != null)
             {
                 progressBar.Value = 0;
+            }
+
+            if (cropImage != null)
+            {
+                cropImage.Texture = null;
+                cropImage.Visible = false;
             }
             
             if (harvestButton != null)
@@ -235,6 +280,64 @@ public partial class FarmUIController : Control
         
         // 更新物资列表
         UpdateResourcesUI();
+    }
+
+    private Texture2D ResolveCropStageTexture(string cropId, int stageIndexFromData, float growthProgress)
+    {
+        if (string.IsNullOrWhiteSpace(cropId))
+            return null;
+
+        var key = cropId.StartsWith("crop_", StringComparison.OrdinalIgnoreCase)
+            ? cropId.Substring(5)
+            : cropId;
+
+        // 固定阈值：0~33% => 1阶段，34~66% => 2阶段，67~100% => 3阶段
+        int derivedStage = growthProgress <= 0.33f ? 1 : (growthProgress <= 0.66f ? 2 : 3);
+        int dataStage = Mathf.Clamp(stageIndexFromData + 1, 1, 3);
+        var candidates = new List<int> { derivedStage, dataStage, 1, 2, 3 };
+
+        foreach (var stage in candidates)
+        {
+            string stagePath = $"res://Assets/UI/Farm/Crops/{key}{stage}.png";
+            if (ResourceLoader.Exists(stagePath))
+            {
+                return GD.Load<Texture2D>(stagePath);
+            }
+        }
+
+        string fallbackPath = $"res://Assets/UI/Farm/{key}.png";
+        return ResourceLoader.Exists(fallbackPath) ? GD.Load<Texture2D>(fallbackPath) : null;
+    }
+
+    private Texture2D TryLoadTexture(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+        if (!ResourceLoader.Exists(path))
+            return null;
+        return GD.Load<Texture2D>(path);
+    }
+
+    private void ApplyFarmProgressBarStyle(ProgressBar progressBar)
+    {
+        if (progressBar == null)
+            return;
+
+        // 约定：进度条(1) 为填充层，进度条2 为底图。
+        var fillTex = TryLoadTexture("res://Assets/UI/Farm/进度条(1).png");
+        var bgTex = TryLoadTexture("res://Assets/UI/Farm/进度条2.png");
+
+        if (bgTex != null)
+        {
+            var bgStyle = new StyleBoxTexture { Texture = bgTex };
+            progressBar.AddThemeStyleboxOverride("background", bgStyle);
+        }
+
+        if (fillTex != null)
+        {
+            var fillStyle = new StyleBoxTexture { Texture = fillTex };
+            progressBar.AddThemeStyleboxOverride("fill", fillStyle);
+        }
     }
     
     private void UpdateActiveEffectsUI()
@@ -312,6 +415,25 @@ public partial class FarmUIController : Control
         _eventBus.CropEffectApplied += OnCropEffectApplied;
         _eventBus.ResourceAppliedToCrop += OnResourceAppliedToCrop;
         _eventBus.CombatResourcesGenerated += OnCombatResourcesGenerated;
+    }
+    
+    private void UnsubscribeFromEvents()
+    {
+        if (_eventBus == null)
+            return;
+            
+        _eventBus.CropPlanted -= OnCropPlanted;
+        _eventBus.CropGrowthUpdated -= OnCropGrowthUpdated;
+        _eventBus.CropHarvested -= OnCropHarvested;
+        _eventBus.CropEffectApplied -= OnCropEffectApplied;
+        _eventBus.ResourceAppliedToCrop -= OnResourceAppliedToCrop;
+        _eventBus.CombatResourcesGenerated -= OnCombatResourcesGenerated;
+    }
+    
+    public override void _ExitTree()
+    {
+        base._ExitTree();
+        UnsubscribeFromEvents();
     }
     
     // UI事件处理

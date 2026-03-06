@@ -11,7 +11,7 @@ public class PlayerData
     public int CurrentHealth { get; set; } = 100; // 初始当前生命值
     public int Attack { get; set; } = 10; // 基础攻击力
     public int Defense { get; set; } = 5; // 基础防御力
-    public int ActionPoints { get; set; } = 3; // 每回合行动点数
+    public int Energy { get; set; } = 3; // 每回合能量
     public float Speed { get; set; } = 1.0f; // 速度影响行动顺序
     public float Luck { get; set; } = 1.0f; // 幸运值影响掉落等
     public int Gold { get; set; } = 50; // 初始金币数量
@@ -29,7 +29,7 @@ public class PlayerData
             GameEnums.PlayerStatType.MaxHealth => MaxHealth,
             GameEnums.PlayerStatType.Attack => Attack,
             GameEnums.PlayerStatType.Defense => Defense,
-            GameEnums.PlayerStatType.ActionPoints => ActionPoints,
+            GameEnums.PlayerStatType.Energy => Energy,
             GameEnums.PlayerStatType.Speed => Speed,
             GameEnums.PlayerStatType.Luck => Luck,
             _ => 0
@@ -52,8 +52,8 @@ public class PlayerData
             case GameEnums.PlayerStatType.Defense:
                 Defense = (int)value;
                 break;
-            case GameEnums.PlayerStatType.ActionPoints:
-                ActionPoints = (int)value;
+            case GameEnums.PlayerStatType.Energy:
+                Energy = (int)value;
                 break;
             case GameEnums.PlayerStatType.Speed:
                 Speed = value;
@@ -122,7 +122,29 @@ public class EnemyData
     public int Attack { get; set; }
     public int Defense { get; set; }
     public List<string> Abilities { get; set; } = new();
-
+    
+    // 扩展敌人AI与奖励
+    public List<string> AiPattern { get; set; } = new(); // 预设AI行为组 (如："Attack", "Defend", "Debuff")
+    public int RewardGold { get; set; } // 掉落金币
+    public int RewardExp { get; set; }  // 掉落经验
+    public List<string> RewardItems { get; set; } = new(); // 掉落物品（物品ID列表）
+    
+    public EnemyData Clone()
+    {
+        return new EnemyData
+        {
+            Id = this.Id,
+            Name = this.Name,
+            Health = this.Health,
+            Attack = this.Attack,
+            Defense = this.Defense,
+            Abilities = new List<string>(this.Abilities),
+            AiPattern = new List<string>(this.AiPattern),
+            RewardGold = this.RewardGold,
+            RewardExp = this.RewardExp,
+            RewardItems = new List<string>(this.RewardItems)
+        };
+    }
 }
 
 // 作物数据
@@ -155,6 +177,27 @@ public class CropEffectData
     // 遗忘效果
     public int CardsToRemove { get; set; } = 0; // 删除卡牌数量
     public List<string> StatToRemove { get; set; } = new(); // 要移除的属性（暂时不用）
+
+    // 扩展效果：用于存放“下场战斗生效”“条件触发”等配置
+    public Dictionary<string, float> ConditionalModifiers { get; set; } = new();
+    public Dictionary<string, float> NextBattleModifiers { get; set; } = new();
+    public List<string> GrantedStatuses { get; set; } = new();
+    public List<string> GrantedCards { get; set; } = new();
+}
+
+// 状态效果定义（来自策划表 State.csv）
+[Serializable]
+public class StatusEffectData
+{
+    public string Id { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public string StackRule { get; set; }
+    public string Duration { get; set; }
+    public string Notes { get; set; }
+    public bool IsStackable { get; set; }
+    public int MaxStacks { get; set; }
+    public Dictionary<string, float> NumericParams { get; set; } = new();
 }
 
 // 作物奖励

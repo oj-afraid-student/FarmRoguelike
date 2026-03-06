@@ -57,10 +57,22 @@ public partial class EnderChestUIController : Control
             _descriptionLabel.Text = "选择你想要的作物，但需要付出代价...";
         }
         
-        // 连接关闭按钮
+        // 连接关闭按钮（若 Export 未绑定，尝试在场景中查找）
+        if (_closeButton == null)
+        {
+            _closeButton = GetNodeOrNull<Button>("CenterContainer/MainContainer/CloseButton")
+                ?? GetNodeOrNull<Button>("CenterContainer/CloseButton")
+                ?? GetNodeOrNull<Button>("CenterContainer/MainContainer/PlayerInfo/CloseButton")
+                ?? FindCloseButtonLocal(this);
+        }
         if (_closeButton != null)
         {
             _closeButton.Pressed += OnCloseButtonPressed;
+            GD.Print("EnderChestUIController: 关闭按钮已连接");
+        }
+        else
+        {
+            GD.PrintErr("EnderChestUIController: 关闭按钮未找到，请检查场景中是否存在 CloseButton");
         }
         
         // 更新玩家信息
@@ -101,8 +113,8 @@ public partial class EnderChestUIController : Control
     {
         // 若 Export 未解析到（如场景结构变更后），尝试按路径查找
         var container = _cropsContainer
-            ?? GetNodeOrNull<VBoxContainer>("MainContainer/ScrollContainer/CropsContainer")
-            ?? GetNodeOrNull<VBoxContainer>("MainContainer/PlayerInfo/ScrollContainer/CropsContainer");
+            ?? GetNodeOrNull<VBoxContainer>("CenterContainer/MainContainer/ScrollContainer/CropsContainer")
+            ?? GetNodeOrNull<VBoxContainer>("CenterContainer/MainContainer/PlayerInfo/ScrollContainer/CropsContainer");
         if (container == null || _currentChest == null)
         {
             if (container == null)
@@ -331,6 +343,7 @@ public partial class EnderChestUIController : Control
     
     private void OnCloseButtonPressed()
     {
+        GD.Print("关闭末影箱UI");
         // 关闭末影箱
         if (_enderChestSystem != null)
         {
@@ -340,17 +353,39 @@ public partial class EnderChestUIController : Control
         // 隐藏UI
         Visible = false;
         
-        // 返回地图
-        if (_gameManager != null)
-        {
-            _gameManager.ChangeState(GameEnums.GameState.MapExploration);
-        }
+        // 通知末影箱已关闭（供上层系统决定后续流程，例如在击败Boss后弹出返回农场对话）
+        _eventBus?.EmitEnderChestClosed();
         
         // 可以选择不销毁，以便下次使用
         // QueueFree();
     }
-    
+
+
+
     // 事件处理
+
+    private Button FindCloseButtonLocal(Node root)
+    {
+        if (root == null) return null;
+        foreach (Node child in root.GetChildren())
+        {
+            if (child is Button b)
+            {
+                if (!string.IsNullOrEmpty(b.Text) && (b.Text.Contains("关") || b.Text.Equals("Close", StringComparison.OrdinalIgnoreCase)))
+                    return b;
+                var btnName = b.Name.ToString();
+                if (!string.IsNullOrEmpty(btnName) && (btnName.Contains("Close") || btnName.Contains("关闭")))
+                    return b;
+            }
+            else
+            {
+                var found = FindCloseButtonLocal(child);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
     private void OnEnderChestOpened(EnderChestData chestData)
     {
         ShowEnderChest(chestData);

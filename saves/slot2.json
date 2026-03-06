@@ -1,0 +1,95 @@
+{
+  "Version": "1.0",
+  "SaveTime": "2026-03-03T09:30:18.9838594+08:00",
+  "PlayerData": {
+    "MaxHealth": 100,
+    "CurrentHealth": 100,
+    "Attack": 10,
+    "Defense": 5,
+    "ActionPoints": 3,
+    "Speed": 1,
+    "Luck": 1,
+    "Gold": 50,
+    "Deck": [
+      "card_attack_basic",
+      "card_attack_basic",
+      "card_attack_basic",
+      "card_defend_basic",
+      "card_defend_basic",
+      "card_defend_basic"
+    ],
+    "EquippedCards": [],
+    "Inventory": {},
+    "Crops": {},
+    "PermanentUpgrades": {}
+  },
+  "CurrentFloor": 1,
+  "CurrentState": 1,
+  "FarmingData": {
+    "Plots": {
+      "0": {
+        "Index": 0,
+        "IsOccupied": false,
+        "CropId": null,
+        "PlantTime": null,
+        "GrowthProgress": 0,
+        "IsReady": false,
+        "Stage": 0
+      },
+      "1": {
+        "Index": 1,
+        "IsOccupied": false,
+        "CropId": null,
+        "PlantTime": null,
+        "GrowthProgress": 0,
+        "IsReady": false,
+        "Stage": 0
+      },
+      "2": {
+        "Index": 2,
+        "IsOccupied": false,
+        "CropId": null,
+        "PlantTime": null,
+        "GrowthProgress": 0,
+        "IsReady": false,
+        "Stage": 0
+      },
+      "3": {
+        "Index": 3,
+        "IsOccupied": false,
+        "CropId": null,
+        "PlantTime": null,
+        "GrowthProgress": 0,
+        "IsReady": false,
+        "Stage": 0
+      },
+      "4": {
+        "Index": 4,
+        "IsOccupied": false,
+        "CropId": null,
+        "PlantTime": null,
+        "GrowthProgress": 0,
+        "IsReady": false,
+        "Stage": 0
+      },
+      "5": {
+        "Index": 5,
+        "IsOccupied": false,
+        "CropId": null,
+        "PlantTime": null,
+        "GrowthProgress": 0,
+        "IsReady": false,
+        "Stage": 0
+      }
+    },
+    "LastUpdateTime": "2026-03-03T09:30:18.9838646+08:00"
+  },
+  "CropEffectData": {
+    "ActiveEffects": []
+  },
+  "ResourceData": {
+    "Resources": {
+      "resource_water": 1
+    }
+  }
+}

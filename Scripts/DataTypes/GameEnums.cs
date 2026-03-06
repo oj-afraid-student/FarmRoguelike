@@ -10,7 +10,8 @@ public static class GameEnums
         Combat,
         Farming,
         RewardSelection,
-        GameOver
+        GameOver,
+        EnderChest
     }
 
     public enum CardType
@@ -18,7 +19,6 @@ public static class GameEnums
         Attack,     // 攻击牌
         Skill,      // 技能牌
         Ability,    // 能力牌
-        Curse       // 诅咒牌
     }
 
     public enum PlayerStatType
@@ -27,7 +27,7 @@ public static class GameEnums
         MaxHealth,
         Attack,
         Defense,
-        ActionPoints,
+        Energy,
         Speed,
         Luck
     }
@@ -35,11 +35,9 @@ public static class GameEnums
     public enum RoomType
     {
         Combat,
-        Event,
-        Shop,
-        Rest,
         Boss,
-        Farming
+        Reward,
+        Trap
     }
 
     public enum RewardType

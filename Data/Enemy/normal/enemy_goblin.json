@@ -1,0 +1,11 @@
+{
+  "Id": "enemy_goblin",
+  "Name": "哥布林",
+  "Health": 45,
+  "Attack": 8,
+  "Defense": 2,
+  "AiPattern": ["Attack", "Attack", "Defend", "Attack"],
+  "RewardGold": 25,
+  "RewardExp": 15,
+  "RewardItems": ["item_goblin_ear"]
+}
