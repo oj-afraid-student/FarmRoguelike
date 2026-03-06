@@ -62,17 +62,24 @@ public partial class GameManager : Node
     private void InitializePlayerData()
     {
         PlayerData = new PlayerData();
-        
-        // 初始卡组
-        PlayerData.Deck = new List<string>
-        {
-            "card_attack_basic",
-            "card_attack_basic",
-            "card_attack_basic",
-            "card_defend_basic",
-            "card_defend_basic",
-            "card_skill_weakness"
-        };
+
+		// 基础属性（根据策划数值）
+		PlayerData.MaxHealth = 50;
+		PlayerData.CurrentHealth = 50;
+		PlayerData.Attack = 7;
+		PlayerData.Defense = 3;
+		PlayerData.ActionPoints = 3;
+
+		// 初始卡组：六张基础战斗牌
+		PlayerData.Deck = new List<string>
+		{
+			"card_scythe_slash",        // 镰刀挥砍
+			"card_hoe_smash",           // 锄头猛击
+			"card_raise_tools",         // 架起农具
+			"card_emergency_bandage",   // 紧急包扎
+			"card_spray_pesticide",     // 喷农药
+			"card_observe_weakness"     // 观察弱点
+		};
     }
     
     private void InitializeDataManager()

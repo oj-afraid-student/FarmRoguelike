@@ -29,7 +29,7 @@ public partial class UIManager : Control
 	[Export] private Label _playerGoldLabel;
 	[Export] private Label _floorLabel;
 	[Export] private Label _actionPointsLabel;
-	[Export] private VBoxContainer _handContainer;
+	[Export] private Container _handContainer;
 	[Export] private ProgressBar _healthBar;
 	[Export] private Control _notificationPanel;
 	[Export] private Label _notificationLabel;
@@ -37,13 +37,19 @@ public partial class UIManager : Control
 	// 游戏管理器引用
 	private GameManager _gameManager;
 	private DataManager _dataManager;
+	private CombatSystem _combatSystem;
 	
 	// UI状态
 	private bool _isInitialized = false;
 	private GameEnums.GameState _lastGameState;
 	
-	// 卡牌UI缓存
-	private List<CardUI> _cardUIs = new List<CardUI>();
+	// 手牌UI缓存（运行时生成，用于刷新/清理）
+	private List<Control> _cardUIs = new List<Control>();
+
+	// 战斗UI内牌堆/弃牌堆 UI（从 CombatUI 场景动态绑定）
+	private TextureRect _combatDrawPileIcon;
+	private Label _combatDrawPileLabel;
+	private Label _combatDiscardPileLabel;
 	
 	// 通知系统
 	private Timer _notificationTimer;
@@ -83,6 +89,13 @@ public partial class UIManager : Control
 		if (_dataManager == null)
 		{
 			GD.PrintErr("DataManager 未找到");
+		}
+		
+		// 获取战斗系统（从场景树查找）
+		_combatSystem = GetNodeOrNull<CombatSystem>("/root/Main/GameRoot/CombatSystem");
+		if (_combatSystem == null)
+		{
+			GD.Print("UIManager: CombatSystem 未找到（当前可能不在战斗中，仅用于战斗UI时可用）。");
 		}
 		
 		_isInitialized = true;
@@ -768,7 +781,18 @@ public partial class UIManager : Control
 
 	private void UpdateHandCards()
 	{
-		if (!_isInitialized || _handContainer == null || _gameManager.PlayerData == null) return;
+		if (!_isInitialized || _handContainer == null) return;
+		
+		// 确保有战斗系统引用
+		if (_combatSystem == null)
+		{
+			_combatSystem = GetNodeOrNull<CombatSystem>("/root/Main/GameRoot/CombatSystem");
+			if (_combatSystem == null)
+			{
+				GD.Print("UIManager: UpdateHandCards 时 CombatSystem 仍未找到。");
+				return;
+			}
+		}
 		
 		// 清空现有手牌
 		foreach (var cardUI in _cardUIs)
@@ -777,34 +801,174 @@ public partial class UIManager : Control
 		}
 		_cardUIs.Clear();
 		
-		// 显示手牌（最多显示5张）
-		var playerData = _gameManager.PlayerData;
-		int cardCount = Math.Min(5, playerData.Deck.Count);
+		// 显示当前手牌（从战斗系统获取真实手牌）
+		var hand = _combatSystem.GetPlayerHand();
+		int cardCount = hand.Count;
 		
 		for (int i = 0; i < cardCount; i++)
 		{
-			var cardId = playerData.Deck[i];
+			var cardId = hand[i];
 			var cardData = _dataManager?.GetCard(cardId);
 			
 			if (cardData != null)
 			{
-				var cardUI = new CardUI(cardData);
-				cardUI.CardClicked += (card) => OnCardClicked(card);
-				_handContainer.AddChild(cardUI);
-				_cardUIs.Add(cardUI);
+				var cardControl = CreateHandCardControl(cardData);
+				_handContainer.AddChild(cardControl);
+				_cardUIs.Add(cardControl);
 			}
 		}
-		
+
+		UpdateDeckInfo();
 		GD.Print($"手牌更新: {cardCount} 张");
+	}
+
+	/// <summary>
+	/// 生成一张“图片卡牌按钮”（优先用 CombatUI.tscn 上你绑定的 6 张贴图）。
+	/// </summary>
+	private Control CreateHandCardControl(CardData cardData)
+	{
+		var button = new Button();
+		button.Flat = true;
+		button.FocusMode = FocusModeEnum.None;
+		button.MouseFilter = Control.MouseFilterEnum.Stop;
+		button.SetMeta("card_id", cardData.Id);
+
+		// 这里不强制缩放，按原图显示（KeepCentered）
+		var art = new TextureRect();
+		art.MouseFilter = Control.MouseFilterEnum.Ignore; // 让点击落到按钮上
+		art.StretchMode = TextureRect.StretchModeEnum.KeepCentered;
+
+		// 从 CombatUI 根节点脚本取你绑定的贴图
+		var deckTest = _currentCombatUI as CombatUIDeckTest;
+		Texture2D tex = deckTest?.GetCardTextureByName(cardData.Name);
+		art.Texture = tex;
+
+		// 如果没找到贴图，回退显示文字（避免空白）
+		if (art.Texture == null)
+		{
+			button.Text = cardData.Name;
+			button.CustomMinimumSize = new Vector2(160, 80);
+		}
+		else
+		{
+			// 用原图尺寸作为按钮最小尺寸，避免容器挤压导致看起来被缩放
+			button.CustomMinimumSize = art.Texture.GetSize();
+		}
+
+		button.AddChild(art);
+
+		button.Pressed += () =>
+		{
+			if (_combatSystem == null)
+				_combatSystem = GetNodeOrNull<CombatSystem>("/root/Main/GameRoot/CombatSystem");
+
+			if (_combatSystem != null)
+			{
+				ShowNotification($"使用卡牌: {cardData.Name}");
+				_combatSystem.PlayCard(cardData.Id);
+				UpdateHandCards();
+				UpdateDeckInfo();
+			}
+		};
+
+		return button;
 	}
 
 	private void InitializeCombatUI()
 	{
-		// 初始化战斗UI的特定元素
+		// 若当前是 CombatUI 场景实例，从场景内绑定手牌容器与牌堆标签
+		if (_currentCombatUI != null)
+		{
+			var handContainer = _currentCombatUI.GetNodeOrNull<Container>("MainVBox/BottomPanel/DeckInfoBar/HandArea/HandContainer");
+			if (handContainer != null)
+				_handContainer = handContainer;
+			_combatDrawPileIcon = _currentCombatUI.GetNodeOrNull<TextureRect>("MainVBox/BottomPanel/DeckInfoBar/DrawPileIcon");
+			_combatDrawPileLabel = _currentCombatUI.GetNodeOrNull<Label>("MainVBox/BottomPanel/DeckInfoBar/DrawPileLabel");
+			_combatDiscardPileLabel = _currentCombatUI.GetNodeOrNull<Label>("MainVBox/BottomPanel/DeckInfoBar/DiscardPileLabel");
+
+			if (_combatDrawPileIcon != null)
+			{
+				_combatDrawPileIcon.GuiInput += OnCombatDrawPileGuiInput;
+			}
+		}
+
 		UpdateHandCards();
-		
-		// 更新敌人信息等
-		// 这里可以根据需要扩展
+		UpdateDeckInfo();
+	}
+
+	/// <summary>根据 CombatSystem 更新牌堆/弃牌堆数量显示</summary>
+	private void UpdateDeckInfo()
+	{
+		if (_combatSystem == null)
+		{
+			_combatSystem = GetNodeOrNull<CombatSystem>("/root/Main/GameRoot/CombatSystem");
+		}
+		if (_combatSystem == null) return;
+		if (_combatDrawPileLabel != null)
+			_combatDrawPileLabel.Text = $"牌堆{_combatSystem.GetDrawPileCount()}";
+		if (_combatDiscardPileLabel != null)
+			_combatDiscardPileLabel.Text = $"弃牌堆{_combatSystem.GetDiscardPileCount()}";
+	}
+
+	/// <summary>战斗 UI 中，点击抽牌堆图标：尝试从 CombatSystem 抽 1 张牌</summary>
+	private void OnCombatDrawPileGuiInput(InputEvent @event)
+	{
+		if (!(@event is InputEventMouseButton mouseEvent) ||
+			mouseEvent.ButtonIndex != MouseButton.Left ||
+			!mouseEvent.Pressed)
+		{
+			return;
+		}
+
+		if (_combatSystem == null)
+		{
+			_combatSystem = GetNodeOrNull<CombatSystem>("/root/Main/GameRoot/CombatSystem");
+		}
+
+		if (_combatSystem == null)
+		{
+			GD.Print("UIManager: 点击牌堆时 CombatSystem 未找到");
+			return;
+		}
+
+		if (!_combatSystem.IsPlayerTurn())
+		{
+			ShowNotification("现在不是玩家回合，不能抽牌");
+			return;
+		}
+
+		// 通过 CombatSystem 抽牌，成功后刷新手牌与牌堆信息
+		if (_combatSystem.TryDrawCard())
+		{
+			UpdateHandCards();
+			UpdateDeckInfo();
+		}
+	}
+
+	/// <summary>获取当前战斗UI中的敌人信息 Label（兼容默认 CombatUI 与场景 CombatUI）</summary>
+	private Label GetCombatEnemyInfoLabel()
+	{
+		if (_currentCombatUI == null) return null;
+		return _currentCombatUI.GetNodeOrNull<Label>("EnemyInfo")
+			?? _currentCombatUI.GetNodeOrNull<Label>("MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox/EnemyInfo");
+	}
+
+	/// <summary>根据 CombatSystem 刷新敌人血条与血量文字</summary>
+	private void UpdateEnemyHPDisplay()
+	{
+		if (_combatSystem == null)
+			_combatSystem = GetNodeOrNull<CombatSystem>("/root/Main/GameRoot/CombatSystem");
+		if (_combatSystem == null || _currentCombatUI == null) return;
+		var (current, max) = _combatSystem.GetEnemyHealth();
+		var bar = _currentCombatUI.GetNodeOrNull<ProgressBar>("MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox/EnemyHPBarContainer/EnemyHPBar");
+		var text = _currentCombatUI.GetNodeOrNull<Label>("MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox/EnemyHPBarContainer/EnemyHPText");
+		if (bar != null)
+		{
+			bar.MaxValue = max;
+			bar.Value = current;
+		}
+		if (text != null)
+			text.Text = $"HP：{current}/{max}";
 	}
 
 	#endregion
@@ -893,19 +1057,20 @@ public partial class UIManager : Control
 	private void OnCombatStarted(string enemyId)
 	{
 		ShowNotification($"战斗开始! 敌人: {enemyId}");
-		
-		// 更新战斗UI中的敌人信息
+		UpdateHandCards();
+		UpdateDeckInfo();
+
+		// 更新战斗UI中的敌人信息与血条
 		if (_currentCombatUI != null)
 		{
-			var enemyInfo = _currentCombatUI.GetNode<Label>("EnemyInfo");
+			var enemyInfo = GetCombatEnemyInfoLabel();
 			if (enemyInfo != null)
 			{
 				var enemyData = _dataManager?.GetEnemy(enemyId);
 				if (enemyData != null)
-				{
 					enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {enemyData.Health})";
-				}
 			}
+			UpdateEnemyHPDisplay();
 		}
 	}
 
@@ -913,6 +1078,7 @@ public partial class UIManager : Control
 	{
 		ShowNotification($"使用卡牌: {cardId}");
 		UpdateHandCards();
+		UpdateDeckInfo();
 	}
 
 	private void OnPlayerDamaged(int damage)
@@ -930,16 +1096,10 @@ public partial class UIManager : Control
 	private void OnEnemyDamaged(string enemyId, int damage)
 	{
 		ShowNotification($"对敌人造成 {damage} 点伤害");
-		
-		// 伤害数字效果
-		if (_currentCombatUI != null)
-		{
-			var enemyInfo = _currentCombatUI.GetNode<Label>("EnemyInfo");
-			if (enemyInfo != null)
-			{
-				ShowDamageEffect(damage, enemyInfo.GlobalPosition, true);
-			}
-		}
+		UpdateEnemyHPDisplay();
+		var enemyInfo = GetCombatEnemyInfoLabel();
+		if (enemyInfo != null)
+			ShowDamageEffect(damage, enemyInfo.GlobalPosition, true);
 	}
 
 	private void OnEnemyDefeated(string enemyId)
@@ -952,20 +1112,24 @@ public partial class UIManager : Control
 		ShowNotification("回合结束");
 		
 		// 禁用所有卡牌交互
-		foreach (var cardUI in _cardUIs)
-		{
-			cardUI.SetInteractable(false);
-		}
+		SetHandCardsInteractable(false);
 	}
 
 	private void OnPlayerTurnStarted()
 	{
 		ShowNotification("你的回合");
-		
+		UpdateDeckInfo(); // 若本回合弃牌堆洗入抽牌堆，刷新牌堆/弃牌堆数字
 		// 启用所有卡牌交互
+		SetHandCardsInteractable(true);
+	}
+
+	private void SetHandCardsInteractable(bool interactable)
+	{
 		foreach (var cardUI in _cardUIs)
 		{
-			cardUI.SetInteractable(true);
+			if (cardUI is Button btn)
+				btn.Disabled = !interactable;
+			cardUI.Modulate = interactable ? Colors.White : Colors.Gray;
 		}
 	}
 
@@ -1178,11 +1342,24 @@ public partial class UIManager : Control
 
 	private void OnCardClicked(CardUI cardUI)
 	{
-		// 处理卡牌点击
-		ShowNotification($"点击卡牌: {cardUI.CardData.Name}");
+		// 处理卡牌点击：调用战斗系统出牌
+		if (_combatSystem == null)
+		{
+			_combatSystem = GetNodeOrNull<CombatSystem>("/root/Main/GameRoot/CombatSystem");
+		}
 		
-		// 这里应该调用战斗系统的出牌方法
-		// EventBus.Instance?.EmitCardPlayed(cardUI.CardData.Id, "target");
+		if (_combatSystem != null && cardUI.CardData != null)
+		{
+			ShowNotification($"使用卡牌: {cardUI.CardData.Name}");
+			_combatSystem.PlayCard(cardUI.CardData.Id);
+			
+			// 出牌后刷新手牌显示
+			UpdateHandCards();
+		}
+		else
+		{
+			ShowNotification($"点击卡牌: {cardUI.CardData?.Name ?? "未知"}（CombatSystem 未就绪）");
+		}
 	}
 
 	#endregion

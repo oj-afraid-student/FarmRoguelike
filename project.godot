@@ -22,6 +22,11 @@ DataManager="*uid://hjvh3tngwrfj"
 GameManager="*uid://dj6pycovd2jnh"
 UIManager="*uid://ps1un7gbc3ac"
 
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+
 [dotnet]
 
 project/assembly_name="新建游戏项目"
