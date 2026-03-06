@@ -127,24 +127,94 @@ public partial class CropEffectSystem : Node
         
         foreach (var boost in cropData.EffectData.StatBoosts)
         {
-            // 将字符串转换为PlayerStatType
-            if (Enum.TryParse<GameEnums.PlayerStatType>(boost.Key, out var statType))
+            // 优先按玩家属性应用；若不是基础属性则落入 PermanentUpgrades
+            if (TryResolveStatType(boost.Key, out var statType))
             {
                 float currentValue = playerData.GetStat(statType);
-                float newValue = currentValue + boost.Value;
+                float delta = boost.Value;
+                // 约定：绝对值小于1的值按比例加成处理（例如 0.10 => +10%）
+                float newValue = Mathf.Abs(delta) < 1.0f
+                    ? currentValue * (1.0f + delta)
+                    : currentValue + delta;
                 
                 playerData.SetStat(statType, newValue);
                 _gameManager.UpdateStat(statType, newValue);
                 
-                GD.Print($"属性加成: {statType} {currentValue} -> {newValue} (+{boost.Value})");
+                GD.Print($"属性加成: {statType} {currentValue} -> {newValue} (cfg={boost.Value})");
             }
             else
             {
-                GD.PrintErr($"无法解析属性类型: {boost.Key}");
+                if (playerData.PermanentUpgrades == null)
+                {
+                    playerData.PermanentUpgrades = new Dictionary<string, float>();
+                }
+
+                float oldValue = playerData.PermanentUpgrades.GetValueOrDefault(boost.Key, 0f);
+                float newValue = oldValue + boost.Value;
+                playerData.PermanentUpgrades[boost.Key] = newValue;
+                GD.Print($"记录扩展属性加成: {boost.Key} {oldValue} -> {newValue}");
+            }
+        }
+
+        // 记录“下次战斗生效”类效果，交给 CombatSystem 在 StartCombat 时读取
+        if (cropData.EffectData.NextBattleModifiers != null && cropData.EffectData.NextBattleModifiers.Count > 0)
+        {
+            if (playerData.PermanentUpgrades == null)
+            {
+                playerData.PermanentUpgrades = new Dictionary<string, float>();
+            }
+
+            foreach (var item in cropData.EffectData.NextBattleModifiers)
+            {
+                float oldValue = playerData.PermanentUpgrades.GetValueOrDefault(item.Key, 0f);
+                float newValue = oldValue + item.Value;
+                playerData.PermanentUpgrades[item.Key] = newValue;
+                GD.Print($"记录下场战斗增益: {item.Key} {oldValue} -> {newValue}");
             }
         }
         
         return true;
+    }
+
+    private bool TryResolveStatType(string key, out GameEnums.PlayerStatType statType)
+    {
+        // 兼容策划表常见写法与中英文别名
+        switch (key)
+        {
+            case "HP":
+            case "Health":
+            case "生命":
+                statType = GameEnums.PlayerStatType.Health;
+                return true;
+            case "MaxHP":
+            case "MaxHealth":
+            case "最大生命":
+                statType = GameEnums.PlayerStatType.MaxHealth;
+                return true;
+            case "Attack":
+            case "攻击":
+                statType = GameEnums.PlayerStatType.Attack;
+                return true;
+            case "Defense":
+            case "防御":
+                statType = GameEnums.PlayerStatType.Defense;
+                return true;
+            case "Energy":
+            case "ActionPoint":
+            case "行动力":
+                statType = GameEnums.PlayerStatType.Energy;
+                return true;
+            case "Speed":
+            case "速度":
+                statType = GameEnums.PlayerStatType.Speed;
+                return true;
+            case "Luck":
+            case "幸运":
+                statType = GameEnums.PlayerStatType.Luck;
+                return true;
+            default:
+                return Enum.TryParse<GameEnums.PlayerStatType>(key, out statType);
+        }
     }
     
     /// <summary>

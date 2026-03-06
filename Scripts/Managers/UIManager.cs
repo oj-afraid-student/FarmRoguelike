@@ -13,6 +13,7 @@ public partial class UIManager : Control
 	private PackedScene _gameOverScene;
 	private PackedScene _pauseMenuScene;
 	private PackedScene _enderChestUIScene;
+	[Export] private bool _forceUseDefaultFarmUI = true;
 
 	
 	// 当前UI实例
@@ -41,6 +42,10 @@ public partial class UIManager : Control
 	[Export] private Label _actionPointsLabel;
 	[Export] private HBoxContainer _handContainer;
 	[Export] private ProgressBar _healthBar;
+	private TextureButton _drawPileButton;
+	private TextureButton _discardPileButton;
+	private Label _drawPileLabel;
+	private Label _discardPileLabel;
 	[Export] private Control _notificationPanel;
 	[Export] private Label _notificationLabel;
 	
@@ -362,7 +367,8 @@ public partial class UIManager : Control
 
 	private void ShowFarmUI()
 	{
-		if (_farmUIScene != null)
+		// 如果开启强制默认模式，则无论是否有 FarmUI.tscn 都走代码生成版本。
+		if (_farmUIScene != null && !_forceUseDefaultFarmUI)
 		{
 			_currentFarmUI = _farmUIScene.Instantiate<Control>();
 			_uiLayer.AddChild(_currentFarmUI);
@@ -374,16 +380,28 @@ public partial class UIManager : Control
 				closeBtn.Pressed += OnCloseFarmButtonPressed;
 			}
 
-			// 初始化农场UI
-			InitializeFarmPlotUIs();	
+			// 场景版：绑定节点引用后再初始化，避免 _plotsContainer 等为空
+			BindFarmUINodesFromScene(_currentFarmUI);
+			InitializeFarmPlotUIs();
 		}
 		else
 		{
+			GD.Print("使用代码生成的默认农场UI");
 			CreateDefaultFarmUI();
 		}
 		
 		ShowNotification("进入农场");
 		SetupFarmUI();
+	}
+
+	private void BindFarmUINodesFromScene(Control farmRoot)
+	{
+		if (farmRoot == null) return;
+
+		_plotsContainer = farmRoot.GetNodeOrNull<GridContainer>("MainContainer/PlotsSection/PlotsContainer");
+		_cropSelectionContainer = farmRoot.GetNodeOrNull<VBoxContainer>("MainContainer/LeftPanel/CropSelectionSection/CropSelectionContainer");
+		_activeEffectsContainer = farmRoot.GetNodeOrNull<VBoxContainer>("MainContainer/LeftPanel/EffectsSection/ActiveEffectsContainer");
+		_resourcesContainer = farmRoot.GetNodeOrNull<VBoxContainer>("MainContainer/LeftPanel/ResourcesSection/ResourcesContainer");
 	}
 
 	private void ShowRewardUI()
@@ -532,6 +550,10 @@ public partial class UIManager : Control
 		_cardUIs.Clear();
 		
 		_handContainer = null;
+		_drawPileButton = null;
+		_discardPileButton = null;
+		_drawPileLabel = null;
+		_discardPileLabel = null;
 	}
 
 	private void UpdateGlobalUI()
@@ -617,13 +639,39 @@ public partial class UIManager : Control
 	{
 		var plotContainer = new VBoxContainer();
 		plotContainer.Name = $"Plot_{plotIndex}";
+		plotContainer.Alignment = BoxContainer.AlignmentMode.Center;
+		plotContainer.AddThemeConstantOverride("separation", 4);
 
-		var plotButton = new Button();
-		plotButton.Text = $"地块 {plotIndex + 1}";
+		var plotButton = new TextureButton();
+		plotButton.Name = "PlotButton";
+		plotButton.CustomMinimumSize = new Vector2(140, 140);
+		var soilTexture = TryLoadTexture("res://Assets/UI/Farm/slot_soil.png");
+		if (soilTexture != null)
+		{
+			plotButton.TextureNormal = soilTexture;
+			plotButton.StretchMode = TextureButton.StretchModeEnum.KeepAspectCovered;
+		}
 		plotButton.Pressed += () => OnPlotClicked(plotIndex);
+
+		// 叠加作物贴图（根据生长阶段切换）
+		var cropImage = new TextureRect();
+		cropImage.Name = "CropImage";
+		cropImage.Visible = false;
+		cropImage.CustomMinimumSize = new Vector2(76, 76);
+		cropImage.SetAnchorsPreset(Control.LayoutPreset.Center);
+		cropImage.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		cropImage.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		cropImage.MouseFilter = Control.MouseFilterEnum.Ignore;
+		plotButton.AddChild(cropImage);
+
 		plotContainer.AddChild(plotButton);
 
+		var plotIndexLabel = new Label { Name = "PlotIndexLabel", Text = $"地块 {plotIndex + 1}" };
+		plotIndexLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		plotContainer.AddChild(plotIndexLabel);
+
 		var cropLabel = new Label { Name = "CropLabel", Text = "空" };
+		cropLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		plotContainer.AddChild(cropLabel);
 
 		var progressBar = new ProgressBar
@@ -633,6 +681,9 @@ public partial class UIManager : Control
 			MaxValue = 1,
 			Value = 0
 		};
+		progressBar.CustomMinimumSize = new Vector2(130, 16);
+		progressBar.ShowPercentage = false;
+		ApplyFarmProgressBarStyle(progressBar);
 		plotContainer.AddChild(progressBar);
 
 		var actionContainer = new HBoxContainer { Name = "ActionContainer" };
@@ -665,6 +716,7 @@ public partial class UIManager : Control
 
 		var cropLabel = plotUI.GetNodeOrNull<Label>("CropLabel");
 		var progressBar = plotUI.GetNodeOrNull<ProgressBar>("ProgressBar");
+		var cropImage = plotUI.GetNodeOrNull<TextureRect>("PlotButton/CropImage");
 		var harvestButton = plotUI.GetNodeOrNull<Button>("ActionContainer/HarvestButton");
 		var useResourceButton = plotUI.GetNodeOrNull<Button>("ActionContainer/UseResourceButton");
 
@@ -675,6 +727,12 @@ public partial class UIManager : Control
 			{
 				cropLabel.Text = $"{cropData.Name}\n进度: {plot.GrowthProgress * 100:F1}%";
 				progressBar.Value = plot.GrowthProgress;
+				if (cropImage != null)
+				{
+					var stageTex = ResolveCropStageTexture(plot.CropId, plot.Stage, plot.GrowthProgress);
+					cropImage.Texture = stageTex;
+					cropImage.Visible = stageTex != null;
+				}
 				harvestButton.Visible = plot.IsReady;
 				useResourceButton.Visible = !plot.IsReady;
 			}
@@ -683,8 +741,61 @@ public partial class UIManager : Control
 		{
 			cropLabel.Text = "空";
 			progressBar.Value = 0;
+			if (cropImage != null)
+			{
+				cropImage.Texture = null;
+				cropImage.Visible = false;
+			}
 			harvestButton.Visible = false;
 			useResourceButton.Visible = false;
+		}
+	}
+
+	private Texture2D ResolveCropStageTexture(string cropId, int stageIndexFromData, float growthProgress)
+	{
+		if (string.IsNullOrWhiteSpace(cropId)) return null;
+
+		var key = cropId.StartsWith("crop_", StringComparison.OrdinalIgnoreCase)
+			? cropId.Substring(5)
+			: cropId;
+
+		// 固定阈值：0~33% => 1阶段，34~66% => 2阶段，67~100% => 3阶段
+		int derivedStage = growthProgress <= 0.33f ? 1 : (growthProgress <= 0.66f ? 2 : 3);
+		int dataStage = Mathf.Clamp(stageIndexFromData + 1, 1, 3);
+
+		var candidates = new List<int> { derivedStage, dataStage, 1, 2, 3 };
+		foreach (var stage in candidates)
+		{
+			string stagePath = $"res://Assets/UI/Farm/Crops/{key}{stage}.png";
+			if (ResourceLoader.Exists(stagePath))
+			{
+				return GD.Load<Texture2D>(stagePath);
+			}
+		}
+
+		// 回退：单图资源
+		string fallbackPath = $"res://Assets/UI/Farm/{key}.png";
+		return ResourceLoader.Exists(fallbackPath) ? GD.Load<Texture2D>(fallbackPath) : null;
+	}
+
+	private void ApplyFarmProgressBarStyle(ProgressBar progressBar)
+	{
+		if (progressBar == null) return;
+
+		// 约定：进度条(1) 为填充层，进度条2 为底图。
+		var fillTex = TryLoadTexture("res://Assets/UI/Farm/进度条(1).png");
+		var bgTex = TryLoadTexture("res://Assets/UI/Farm/进度条2.png");
+
+		if (bgTex != null)
+		{
+			var bgStyle = new StyleBoxTexture { Texture = bgTex };
+			progressBar.AddThemeStyleboxOverride("background", bgStyle);
+		}
+
+		if (fillTex != null)
+		{
+			var fillStyle = new StyleBoxTexture { Texture = fillTex };
+			progressBar.AddThemeStyleboxOverride("fill", fillStyle);
 		}
 	}
 
@@ -957,33 +1068,117 @@ public partial class UIManager : Control
 
 	private void CreateDefaultCombatUI()
 	{
-		var root = new ColorRect();
-		root.Name = "DefaultCombatUI";
-		// 让背景覆盖全屏
-		root.Color = new Color(0, 0, 0, 0.9f); 
-		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		// 尽量使用已有 UI 素材（存在则使用贴图，否则退回为纯色背景）
+		var bgTexture = TryLoadTexture("res://Assets/UI/Combat/战斗背景(1).png");
+		Control root;
+		if (bgTexture != null)
+		{
+			var bg = new TextureRect();
+			bg.Name = "DefaultCombatUI";
+			bg.Texture = bgTexture;
+			bg.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+			bg.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			root = bg;
+		}
+		else
+		{
+			var bg = new ColorRect();
+			bg.Name = "DefaultCombatUI";
+			bg.Color = new Color(0, 0, 0, 0.9f);
+			bg.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			root = bg;
+		}
 		
-		// 提供一个居中的容器
-		var box = new MarginContainer();
-		box.SetAnchorsPreset(Control.LayoutPreset.Center);
-		box.GrowHorizontal = Control.GrowDirection.Both;
-		box.GrowVertical = Control.GrowDirection.Both;
-		root.AddChild(box);
-		
-		var container = new VBoxContainer();
-		container.Name = "CombatLayout";
-		container.Alignment = BoxContainer.AlignmentMode.Center;
-		box.AddChild(container);
-		
-		// 顶部：玩家生命与护盾显示
-		var playerStats = new HBoxContainer();
-		playerStats.Alignment = BoxContainer.AlignmentMode.Center;
-		playerStats.AddThemeConstantOverride("separation", 12);
+		// 主布局改为左右分栏：左侧玩家状态与手牌，右侧敌人信息
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		int horizontalMargin = (int)Mathf.Clamp(viewportSize.X * 0.03f, 24f, 72f);
+		int verticalMargin = (int)Mathf.Clamp(viewportSize.Y * 0.035f, 20f, 56f);
+		int splitSeparation = (int)Mathf.Clamp(viewportSize.X * 0.03f, 24f, 64f);
+		int handCardSpacing = (int)Mathf.Clamp(viewportSize.X * 0.014f, 20f, 36f);
+		float portraitTopOffset = Mathf.Clamp(viewportSize.Y * 0.24f, 120f, 300f);
+		float pileWidth = Mathf.Clamp(viewportSize.X * 0.07f, 72f, 120f);
+		float pileHeight = Mathf.Clamp(viewportSize.Y * 0.16f, 92f, 168f);
+		float portraitSize = Mathf.Clamp(viewportSize.Y * 0.26f, 160f, 300f);
 
-		_combatPlayerHealthLabel = new Label();
-		_combatPlayerHealthLabel.Name = "PlayerHealthLabel";
-		_combatPlayerHealthLabel.Text = "生命: --/--";
-		playerStats.AddChild(_combatPlayerHealthLabel);
+		var mainMargin = new MarginContainer();
+		mainMargin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		mainMargin.AddThemeConstantOverride("margin_left", horizontalMargin);
+		mainMargin.AddThemeConstantOverride("margin_right", horizontalMargin);
+		mainMargin.AddThemeConstantOverride("margin_top", verticalMargin);
+		mainMargin.AddThemeConstantOverride("margin_bottom", verticalMargin);
+		root.AddChild(mainMargin);
+
+		var mainSplit = new HBoxContainer();
+		mainSplit.Name = "CombatLayout";
+		mainSplit.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		mainSplit.AddThemeConstantOverride("separation", splitSeparation);
+		mainMargin.AddChild(mainSplit);
+
+		var leftColumn = new VBoxContainer();
+		leftColumn.Name = "PlayerColumn";
+		leftColumn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		leftColumn.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		leftColumn.SizeFlagsStretchRatio = 1.6f;
+		leftColumn.AddThemeConstantOverride("separation", 12);
+		mainSplit.AddChild(leftColumn);
+
+		var rightColumn = new VBoxContainer();
+		rightColumn.Name = "EnemyColumn";
+		rightColumn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		rightColumn.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		rightColumn.SizeFlagsStretchRatio = 1.0f;
+		rightColumn.Alignment = BoxContainer.AlignmentMode.Begin;
+		rightColumn.AddThemeConstantOverride("separation", 14);
+		mainSplit.AddChild(rightColumn);
+
+		// 统一下移头像行，避免内容过于贴近顶部。
+		var leftTopSpacer = new Control();
+		leftTopSpacer.CustomMinimumSize = new Vector2(0, portraitTopOffset);
+		leftColumn.AddChild(leftTopSpacer);
+
+		var rightTopSpacer = new Control();
+		rightTopSpacer.CustomMinimumSize = new Vector2(0, portraitTopOffset);
+		rightColumn.AddChild(rightTopSpacer);
+
+		// 左侧头像区：放置玩家图标素材
+		var playerIdentity = new HBoxContainer();
+		playerIdentity.Name = "PlayerIdentity";
+		playerIdentity.Alignment = BoxContainer.AlignmentMode.Begin;
+		playerIdentity.AddThemeConstantOverride("separation", 12);
+		leftColumn.AddChild(playerIdentity);
+
+		var playerPortrait = new TextureRect();
+		playerPortrait.Name = "PlayerPortrait";
+		playerPortrait.Texture = TryLoadTexture("res://Assets/UI/Combat/玩家图标.png");
+		playerPortrait.CustomMinimumSize = new Vector2(portraitSize, portraitSize);
+		playerPortrait.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		playerPortrait.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		playerIdentity.AddChild(playerPortrait);
+		
+		// 左侧：玩家状态条放在头像右侧，形成 RPG 面板布局
+		var playerStats = new VBoxContainer();
+		playerStats.Name = "PlayerStatsPanel";
+		playerStats.Alignment = BoxContainer.AlignmentMode.Center;
+		playerStats.AddThemeConstantOverride("separation", 8);
+		playerIdentity.AddChild(playerStats);
+
+		// 生命条（使用贴图样式）
+		var healthBar = CreateStyledProgressBar(
+			"res://Assets/UI/Combat/hp条红.png",
+			"res://Assets/UI/Combat/hp条(1).png");
+		if (healthBar != null)
+		{
+			healthBar.CustomMinimumSize = new Vector2(240, 24);
+			playerStats.AddChild(healthBar);
+			_healthBar = healthBar;
+		}
+		else
+		{
+			_combatPlayerHealthLabel = new Label();
+			_combatPlayerHealthLabel.Name = "PlayerHealthLabel";
+			_combatPlayerHealthLabel.Text = "生命: --/--";
+			playerStats.AddChild(_combatPlayerHealthLabel);
+		}
 
 		_combatPlayerShieldLabel = new Label();
 		_combatPlayerShieldLabel.Name = "PlayerShieldLabel";
@@ -995,33 +1190,106 @@ public partial class UIManager : Control
 		_combatPlayerEnergyLabel.Text = "能量: 3";
 		playerStats.AddChild(_combatPlayerEnergyLabel);
 
-		container.AddChild(playerStats);
+		var handLabel = new Label();
+		handLabel.Text = "手牌";
+		handLabel.AddThemeFontSizeOverride("font_size", 18);
+		leftColumn.AddChild(handLabel);
+		
+		var deckInfoBar = new HBoxContainer();
+		deckInfoBar.Name = "DeckInfoBar";
+		deckInfoBar.Alignment = BoxContainer.AlignmentMode.Begin;
+		deckInfoBar.AddThemeConstantOverride("separation", 18);
+		leftColumn.AddChild(deckInfoBar);
+
+		var drawPanel = new VBoxContainer();
+		drawPanel.Alignment = BoxContainer.AlignmentMode.Center;
+		drawPanel.AddThemeConstantOverride("separation", 4);
+		deckInfoBar.AddChild(drawPanel);
+
+		_drawPileButton = new TextureButton();
+		_drawPileButton.Name = "DrawPileIcon";
+		_drawPileButton.CustomMinimumSize = new Vector2(pileWidth, pileHeight);
+		var drawTex = TryLoadTexture("res://Assets/UI/Combat/deck_draw_pile.png");
+		if (drawTex != null)
+		{
+			_drawPileButton.TextureNormal = drawTex;
+			_drawPileButton.StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered;
+		}
+		_drawPileButton.Pressed += OnDrawPilePressed;
+		drawPanel.AddChild(_drawPileButton);
+
+		_drawPileLabel = new Label();
+		_drawPileLabel.Name = "DrawPileLabel";
+		_drawPileLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		drawPanel.AddChild(_drawPileLabel);
+
+		var handArea = new VBoxContainer();
+		handArea.Name = "HandArea";
+		handArea.Alignment = BoxContainer.AlignmentMode.Begin;
+		handArea.AddThemeConstantOverride("separation", 8);
+		handArea.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		deckInfoBar.AddChild(handArea);
+
+		var handContainer = new HBoxContainer();
+		handContainer.Name = "HandContainer";
+		handContainer.Alignment = BoxContainer.AlignmentMode.Begin;
+		handContainer.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		handContainer.AddThemeConstantOverride("separation", handCardSpacing);
+		handArea.AddChild(handContainer);
+
+		var discardPanel = new VBoxContainer();
+		discardPanel.Alignment = BoxContainer.AlignmentMode.Center;
+		discardPanel.AddThemeConstantOverride("separation", 4);
+		deckInfoBar.AddChild(discardPanel);
+
+		_discardPileButton = new TextureButton();
+		_discardPileButton.Name = "DiscardPileIcon";
+		_discardPileButton.CustomMinimumSize = new Vector2(pileWidth, pileHeight);
+		if (drawTex != null)
+		{
+			_discardPileButton.TextureNormal = drawTex;
+			_discardPileButton.StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered;
+		}
+		_discardPileButton.Pressed += OnDiscardPilePressed;
+		discardPanel.AddChild(_discardPileButton);
+
+		_discardPileLabel = new Label();
+		_discardPileLabel.Name = "DiscardPileLabel";
+		_discardPileLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		discardPanel.AddChild(_discardPileLabel);
+
+		var endTurnButton = new Button();
+		endTurnButton.Text = "结束回合";
+		endTurnButton.CustomMinimumSize = new Vector2(160, 46);
+		endTurnButton.Pressed += OnEndTurnButtonPressed;
+		leftColumn.AddChild(endTurnButton);
+
+		// 右侧：敌人信息区域（先头像，再文字，确保与玩家头像同水平线）
+		var enemyPortrait = new TextureRect();
+		enemyPortrait.Name = "EnemyPortrait";
+		enemyPortrait.Texture = TryLoadTexture("res://Assets/UI/Combat/enemy_slime.png");
+		enemyPortrait.CustomMinimumSize = new Vector2(portraitSize, portraitSize);
+		enemyPortrait.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		enemyPortrait.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		enemyPortrait.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		enemyPortrait.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+		rightColumn.AddChild(enemyPortrait);
+
+		var enemyTitle = new Label();
+		enemyTitle.Text = "敌人";
+		enemyTitle.AddThemeFontSizeOverride("font_size", 20);
+		enemyTitle.HorizontalAlignment = HorizontalAlignment.Center;
+		rightColumn.AddChild(enemyTitle);
 
 		var enemyInfo = new Label();
 		enemyInfo.Name = "EnemyInfo";
 		enemyInfo.Text = "敌人: ???";
-		container.AddChild(enemyInfo);
-		
-		var handLabel = new Label();
-		handLabel.Text = "手牌:";
-		container.AddChild(handLabel);
-		
-		var handContainer = new HBoxContainer();
-		handContainer.Name = "HandContainer";
-		handContainer.Alignment = BoxContainer.AlignmentMode.Center; //居中
-		handContainer.AddThemeConstantOverride("separation", 15);
-		container.AddChild(handContainer);
+		enemyInfo.AutowrapMode = TextServer.AutowrapMode.Word;
+		enemyInfo.HorizontalAlignment = HorizontalAlignment.Center;
+		rightColumn.AddChild(enemyInfo);
 		
 		// 将其赋值给全局变量
 		_handContainer = handContainer;
-		
-		// 拉开点距离
-		container.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 30) });
-		
-		var endTurnButton = new Button();
-		endTurnButton.Text = "结束回合";
-		endTurnButton.Pressed += OnEndTurnButtonPressed;
-		container.AddChild(endTurnButton);
 		
 		_currentCombatUI = root;
 		_uiLayer.AddChild(root);
@@ -1029,13 +1297,22 @@ public partial class UIManager : Control
 
 	private void CreateDefaultMapUI()
 	{
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		float panelWidth = Mathf.Clamp(viewportSize.X * 0.68f, 560f, 1280f);
+		float panelHeight = Mathf.Clamp(viewportSize.Y * 0.82f, 420f, 900f);
+		int panelPadding = (int)Mathf.Clamp(viewportSize.X * 0.018f, 14f, 28f);
+		float navButtonW = Mathf.Clamp(viewportSize.X * 0.055f, 56f, 100f);
+		float navButtonH = Mathf.Clamp(viewportSize.Y * 0.05f, 42f, 72f);
+		int navGap = (int)Mathf.Clamp(viewportSize.X * 0.008f, 8f, 18f);
+
 		var container = new Control();
 		container.Name = "DefaultMapUI";
 		container.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		
 		// 添加背景图片
+		var bgTex = TryLoadTexture("res://Graphics/combat.png") ?? TryLoadTexture("res://Assets/UI/Combat/战斗背景(1).png");
 		var background = new TextureRect();
-		background.Texture = GD.Load<Texture2D>("res://Graphics/combat.png");
+		background.Texture = bgTex;
 		background.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		background.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
 		// 设置拉伸模式以铺满全屏，可以根据需要调整
@@ -1051,109 +1328,117 @@ public partial class UIManager : Control
 		var bgPanel = new ColorRect();
 		bgPanel.Name = "BgPanel";
 		bgPanel.Color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
-		bgPanel.CustomMinimumSize = new Vector2(500, 450);
+		bgPanel.CustomMinimumSize = new Vector2(panelWidth, panelHeight);
 		centerBox.AddChild(bgPanel);
 		
 		var marginBox = new MarginContainer();
 		marginBox.Name = "MarginBox";
 		marginBox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		marginBox.AddThemeConstantOverride("margin_left", panelPadding);
+		marginBox.AddThemeConstantOverride("margin_right", panelPadding);
+		marginBox.AddThemeConstantOverride("margin_top", panelPadding);
+		marginBox.AddThemeConstantOverride("margin_bottom", panelPadding);
 		bgPanel.AddChild(marginBox);
 		
 		var innerContainer = new VBoxContainer();
 		innerContainer.Name = "VBoxContainer";
-		innerContainer.Alignment = BoxContainer.AlignmentMode.Center;
+		innerContainer.Alignment = BoxContainer.AlignmentMode.Begin;
+		innerContainer.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		innerContainer.AddThemeConstantOverride("separation", 10);
 		marginBox.AddChild(innerContainer);
-		
+
+		var topBar = new HBoxContainer();
+		topBar.Name = "TopBar";
+		topBar.Alignment = BoxContainer.AlignmentMode.Center;
+		topBar.AddThemeConstantOverride("separation", 14);
+		innerContainer.AddChild(topBar);
+
 		var mapLabel = new Label();
 		mapLabel.Text = "地图探索界面";
-		mapLabel.AddThemeFontSizeOverride("font_size", 24);
+		mapLabel.AddThemeFontSizeOverride("font_size", (int)Mathf.Clamp(viewportSize.X * 0.016f, 18f, 30f));
 		mapLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		innerContainer.AddChild(mapLabel);
+		topBar.AddChild(mapLabel);
 
 		var pauseButton = new Button();
 		pauseButton.Text = "暂停";
+		pauseButton.CustomMinimumSize = new Vector2(navButtonW * 1.15f, navButtonH);
 		pauseButton.Pressed += () => {
 		if (_gameManager != null)
 		{
 			_gameManager.TogglePause();
 		}
 		};
-		innerContainer.AddChild(pauseButton);
+		topBar.AddChild(pauseButton);
 		
 		var roomInfo = new Label();
 		roomInfo.Name = "RoomInfo";
 		roomInfo.Text = "当前房间: ???";
 		roomInfo.HorizontalAlignment = HorizontalAlignment.Center;
+		roomInfo.AddThemeFontSizeOverride("font_size", (int)Mathf.Clamp(viewportSize.X * 0.012f, 14f, 22f));
 		innerContainer.AddChild(roomInfo);
 		
-		// 加个 CenterContainer 把地图网格居中
+		// 地图土壤格子区：始终放在中间并占据主要空间
 		var gridCenterer = new CenterContainer();
 		gridCenterer.Name = "GridCenterer";
+		gridCenterer.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		gridCenterer.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		innerContainer.AddChild(gridCenterer);
 		
 		// 加个地图网格容器来可视化地图
 		var mapGrid = new GridContainer();
 		mapGrid.Name = "MapGrid";
-		// mapGrid.Alignment = BoxContainer.AlignmentMode.Center; // GridContainer does not have Alignment
-		mapGrid.SetAnchorsPreset(Control.LayoutPreset.Center);
-		mapGrid.AddThemeConstantOverride("h_separation", 5);
-		mapGrid.AddThemeConstantOverride("v_separation", 5);
+		mapGrid.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		mapGrid.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+		mapGrid.AddThemeConstantOverride("h_separation", navGap);
+		mapGrid.AddThemeConstantOverride("v_separation", navGap);
 		gridCenterer.AddChild(mapGrid);
-		
-		// 拉开点距离
-		innerContainer.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 20) });
+
+		innerContainer.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 8) });
 		
 		var moveButtons = new GridContainer();
-	moveButtons.Name = "MoveButtons";
-	moveButtons.Columns = 3;
-	// 设置间距
-	moveButtons.AddThemeConstantOverride("h_separation", 10);
-	moveButtons.AddThemeConstantOverride("v_separation", 10);
-	// 居中整个十字键
-	moveButtons.SetAnchorsPreset(Control.LayoutPreset.Center);
-	
-	// 为了让整个区域在VBox中居中，我们可以再套一层CenterContainer
-	var dpadCenterer = new CenterContainer();
-	dpadCenterer.Name = "DPadCenterer";
-	innerContainer.AddChild(dpadCenterer);
-	dpadCenterer.AddChild(moveButtons);
+		moveButtons.Name = "MoveButtons";
+		moveButtons.Columns = 3;
+		moveButtons.AddThemeConstantOverride("h_separation", navGap);
+		moveButtons.AddThemeConstantOverride("v_separation", navGap);
 
-	// 第一行: 空, 上, 空
-	moveButtons.AddChild(new Control());
-	var upButton = new Button();
-	upButton.Name = "UpButton";
-	upButton.Text = "上";
-	upButton.CustomMinimumSize = new Vector2(60, 40);
-	upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
-	moveButtons.AddChild(upButton);
-	moveButtons.AddChild(new Control());
+		var dpadCenterer = new CenterContainer();
+		dpadCenterer.Name = "DPadCenterer";
+		innerContainer.AddChild(dpadCenterer);
+		dpadCenterer.AddChild(moveButtons);
 
-	// 第二行: 左, 空, 右
-	var leftButton = new Button();
-	leftButton.Name = "LeftButton";
-	leftButton.Text = "左";
-	leftButton.CustomMinimumSize = new Vector2(60, 40);
-	leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
-	moveButtons.AddChild(leftButton);
-	
-	moveButtons.AddChild(new Control()); // 中间留空
-	
-	var rightButton = new Button();
-	rightButton.Name = "RightButton";
-	rightButton.Text = "右";
-	rightButton.CustomMinimumSize = new Vector2(60, 40);
-	rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
-	moveButtons.AddChild(rightButton);
+		moveButtons.AddChild(new Control());
+		var upButton = new Button();
+		upButton.Name = "UpButton";
+		upButton.Text = "上";
+		upButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
+		upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
+		moveButtons.AddChild(upButton);
+		moveButtons.AddChild(new Control());
 
-	// 第三行: 空, 下, 空
-	moveButtons.AddChild(new Control());
-	var downButton = new Button();
-	downButton.Name = "DownButton";
-	downButton.Text = "下";
-	downButton.CustomMinimumSize = new Vector2(60, 40);
-	downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
-	moveButtons.AddChild(downButton);
-	moveButtons.AddChild(new Control());
+		var leftButton = new Button();
+		leftButton.Name = "LeftButton";
+		leftButton.Text = "左";
+		leftButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
+		leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
+		moveButtons.AddChild(leftButton);
+		
+		moveButtons.AddChild(new Control());
+		
+		var rightButton = new Button();
+		rightButton.Name = "RightButton";
+		rightButton.Text = "右";
+		rightButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
+		rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
+		moveButtons.AddChild(rightButton);
+
+		moveButtons.AddChild(new Control());
+		var downButton = new Button();
+		downButton.Name = "DownButton";
+		downButton.Text = "下";
+		downButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
+		downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
+		moveButtons.AddChild(downButton);
+		moveButtons.AddChild(new Control());
 		
 		_currentMapUI = container;
 		_uiLayer.AddChild(container);
@@ -1164,55 +1449,97 @@ public partial class UIManager : Control
 
 	private void CreateDefaultFarmUI()
 	{
-		//调整布局结构：使用全屏根节点，整体靠左排列
-		var rootControl = new Control();
+		// 调整布局结构：使用全屏根节点，整体居中显示
+		Control rootControl;
+		var farmBg = TryLoadTexture("res://Assets/UI/Farm/farm_bg.png");
+		if (farmBg != null)
+		{
+			var bg = new TextureRect();
+			bg.Texture = farmBg;
+			bg.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+			rootControl = bg;
+		}
+		else
+		{
+			var bg = new ColorRect();
+			bg.Color = new Color(0, 0, 0, 0.5f);
+			rootControl = bg;
+		}
 		rootControl.Name = "DefaultFarmUI";
 		rootControl.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 
 		var mainMargin = new MarginContainer();
-		mainMargin.SetAnchorsPreset(Control.LayoutPreset.LeftWide);
-		mainMargin.AddThemeConstantOverride("margin_left", 40);
-		mainMargin.AddThemeConstantOverride("margin_top", 100);
-		mainMargin.AddThemeConstantOverride("margin_bottom", 40);
+		mainMargin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		mainMargin.AddThemeConstantOverride("margin_left", 24);
+		mainMargin.AddThemeConstantOverride("margin_right", 24);
+		mainMargin.AddThemeConstantOverride("margin_top", 32);
+		mainMargin.AddThemeConstantOverride("margin_bottom", 24);
 		mainMargin.MouseFilter = Control.MouseFilterEnum.Ignore;
 		rootControl.AddChild(mainMargin);
 
+		var centerWrap = new CenterContainer();
+		centerWrap.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		mainMargin.AddChild(centerWrap);
+
+		var mainVBox = new VBoxContainer();
+		mainVBox.Alignment = BoxContainer.AlignmentMode.Begin;
+		mainVBox.AddThemeConstantOverride("separation", 14);
+		centerWrap.AddChild(mainVBox);
+
+		var farmTitleTop = new Label();
+		farmTitleTop.Text = "农场";
+		farmTitleTop.HorizontalAlignment = HorizontalAlignment.Center;
+		farmTitleTop.AddThemeFontSizeOverride("font_size", 40);
+		mainVBox.AddChild(farmTitleTop);
+
 		var mainHBox = new HBoxContainer();
 		mainHBox.AddThemeConstantOverride("separation", 50);
-		mainMargin.AddChild(mainHBox);
+		mainHBox.CustomMinimumSize = new Vector2(1180, 640);
+		mainVBox.AddChild(mainHBox);
 
-		// 左侧第一列：农场标题、关闭按钮、地块容器
+		// 左侧工具列：关闭按钮
 		var leftCol = new VBoxContainer();
-		leftCol.Alignment = BoxContainer.AlignmentMode.Begin;
+		leftCol.Alignment = BoxContainer.AlignmentMode.Center;
 		leftCol.AddThemeConstantOverride("separation", 12);
+		leftCol.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		leftCol.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
 		mainHBox.AddChild(leftCol);
-
-		var farmLabel = new Label();
-		farmLabel.Text = "农场";
-		farmLabel.AddThemeFontSizeOverride("font_size", 24);
-		farmLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		leftCol.AddChild(farmLabel);
-		
-		leftCol.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 10) });
 
 		var closeBtn = new Button();
 		closeBtn.Text = "关闭";
+		closeBtn.CustomMinimumSize = new Vector2(120, 44);
 		closeBtn.Pressed += OnCloseFarmButtonPressed;
 		leftCol.AddChild(closeBtn);
-		
-		leftCol.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 8) });
+
+		// 中央地块列：保证地块网格始终位于界面中心
+		var centerCol = new VBoxContainer();
+		centerCol.Name = "CenterPlotsColumn";
+		centerCol.Alignment = BoxContainer.AlignmentMode.Center;
+		centerCol.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		centerCol.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		centerCol.AddThemeConstantOverride("separation", 10);
+		mainHBox.AddChild(centerCol);
+
+		var plotsTitle = new Label();
+		plotsTitle.Text = "地块";
+		plotsTitle.AddThemeFontSizeOverride("font_size", 22);
+		plotsTitle.HorizontalAlignment = HorizontalAlignment.Center;
+		centerCol.AddChild(plotsTitle);
 
 		_plotsContainer = new GridContainer();
 		_plotsContainer.Name = "PlotsContainer";
 		_plotsContainer.Columns = 3;
-		_plotsContainer.AddThemeConstantOverride("h_separation", 10);
-		_plotsContainer.AddThemeConstantOverride("v_separation", 10);
-		leftCol.AddChild(_plotsContainer);
+		_plotsContainer.AddThemeConstantOverride("h_separation", 16);
+		_plotsContainer.AddThemeConstantOverride("v_separation", 16);
+		_plotsContainer.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		centerCol.AddChild(_plotsContainer);
 
-		// 左侧第二列：选择作物、物资效果、激活库存
+		// 右侧信息列：选择作物、物资效果、激活库存
 		var rightCol = new VBoxContainer();
 		rightCol.Alignment = BoxContainer.AlignmentMode.Begin;
 		rightCol.AddThemeConstantOverride("separation", 20);
+		rightCol.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		rightCol.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
 		mainHBox.AddChild(rightCol);
 
 		// 作物选择容器
@@ -1637,14 +1964,47 @@ public partial class UIManager : Control
 				_cardUIs.Add(cardUI);
 			}
 		}
+
+		UpdateDeckInfo();
 		
 		GD.Print($"手牌更新: {cardCount} 张");
+	}
+
+	private void UpdateDeckInfo()
+	{
+		var combatSys = GameRoot.Instance?.CombatSystem;
+		if (combatSys == null) return;
+
+		if (IsInstanceValid(_drawPileLabel))
+		{
+			_drawPileLabel.Text = $"牌堆 {combatSys.GetDrawPileCount()}";
+		}
+
+		if (IsInstanceValid(_discardPileLabel))
+		{
+			_discardPileLabel.Text = $"弃牌堆 {combatSys.GetDiscardPileCount()}";
+		}
+	}
+
+	private void OnDrawPilePressed()
+	{
+		var combatSys = GameRoot.Instance?.CombatSystem;
+		if (combatSys == null) return;
+		ShowNotification($"当前牌堆剩余: {combatSys.GetDrawPileCount()}");
+	}
+
+	private void OnDiscardPilePressed()
+	{
+		var combatSys = GameRoot.Instance?.CombatSystem;
+		if (combatSys == null) return;
+		ShowNotification($"当前弃牌堆数量: {combatSys.GetDiscardPileCount()}");
 	}
 
 	private void InitializeCombatUI()
 	{
 		// 初始化战斗UI的特定元素
 		UpdateHandCards();
+		UpdateDeckInfo();
 		
 		// 更新敌人信息等
 		// 这里可以根据需要扩展
@@ -2177,8 +2537,14 @@ public partial class UIManager : Control
 		int baseSize = 3;
 		int extra = Mathf.Min(mapSystem.CurrentFloor / 3, 2);
 		int mapSize = baseSize + extra;
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		int cellGap = (int)Mathf.Clamp(viewportSize.X * 0.006f, 6f, 12f);
+		float gridSpan = Mathf.Min(viewportSize.X * 0.34f, viewportSize.Y * 0.36f);
+		float cellSize = Mathf.Clamp((gridSpan - (mapSize - 1) * cellGap) / mapSize, 48f, 96f);
 		
 		mapGrid.Columns = mapSize;
+		mapGrid.AddThemeConstantOverride("h_separation", cellGap);
+		mapGrid.AddThemeConstantOverride("v_separation", cellGap);
 		
 		// 必须立即释放节点，否则 GridContainer 会因为 QueueFree 的延迟导致布局完全错乱并且把新节点挤出屏幕外
 		foreach (Node child in mapGrid.GetChildren())
@@ -2216,12 +2582,13 @@ public partial class UIManager : Control
 				}
 				
 				var cell = new ColorRect();
-				cell.CustomMinimumSize = new Vector2(50, 50);
-				
+				cell.CustomMinimumSize = new Vector2(cellSize, cellSize);
+
 				var label = new Label();
 				label.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 				label.HorizontalAlignment = HorizontalAlignment.Center;
 				label.VerticalAlignment = VerticalAlignment.Center;
+				label.AddThemeFontSizeOverride("font_size", 15);
 				cell.AddChild(label);
 				
 				if (room == null)
@@ -2488,6 +2855,40 @@ public partial class UIManager : Control
 		tween.TweenCallback(Callable.From(() => damageLabel.QueueFree()));
 	}
 
+	private Texture2D TryLoadTexture(string path)
+	{
+		if (string.IsNullOrWhiteSpace(path)) return null;
+		if (!ResourceLoader.Exists(path)) return null;
+		return GD.Load<Texture2D>(path);
+	}
+
+	private ProgressBar CreateStyledProgressBar(string fullPath, string emptyPath)
+	{
+		var fullTex = TryLoadTexture(fullPath);
+		var emptyTex = TryLoadTexture(emptyPath);
+		if (fullTex == null && emptyTex == null) return null;
+
+		var bar = new ProgressBar();
+		bar.MinValue = 0;
+		bar.MaxValue = 1;
+		bar.Value = 1;
+		bar.ShowPercentage = false;
+
+		if (emptyTex != null)
+		{
+			var emptyStyle = new StyleBoxTexture();
+			emptyStyle.Texture = emptyTex;
+			bar.AddThemeStyleboxOverride("background", emptyStyle);
+		}
+		if (fullTex != null)
+		{
+			var fullStyle = new StyleBoxTexture();
+			fullStyle.Texture = fullTex;
+			bar.AddThemeStyleboxOverride("fill", fullStyle);
+		}
+		return bar;
+	}
+
 	private void ConnectMainMenuButtons()
 	{
 		// 连接主菜单按钮的事件
@@ -2562,10 +2963,6 @@ public partial class CardUI : Button
 	public CardData CardData { get; private set; }
 	public event Action<CardUI> CardClicked;
 	
-	private Label _nameLabel;
-	private Label _costLabel;
-	private Label _descriptionLabel;
-	
 	public CardUI(CardData cardData)
 	{
 		CardData = cardData;
@@ -2574,33 +2971,40 @@ public partial class CardUI : Button
 	
 	private void InitializeUI()
 	{
-		CustomMinimumSize = new Vector2(100, 150);
+		CustomMinimumSize = new Vector2(160, 240);
 		
-		var container = new VBoxContainer();
-		container.Size = Size;
-		
-		// 卡牌名称
-		_nameLabel = new Label();
-		_nameLabel.Text = CardData.Name;
-		_nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		container.AddChild(_nameLabel);
-		
-		// 卡牌能量
-		_costLabel = new Label();
-		_costLabel.Text = $"能量: {CardData.Cost}";
-		container.AddChild(_costLabel);
-		
-		// 卡牌描述
-		_descriptionLabel = new Label();
-		_descriptionLabel.Text = CardData.Description;
-		_descriptionLabel.AutowrapMode = TextServer.AutowrapMode.Word;
-		_descriptionLabel.CustomMinimumSize = new Vector2(90, 60);
-		container.AddChild(_descriptionLabel);
-		
-		AddChild(container);
+		// 仅显示卡牌素材，不再叠加文字。
+		var cardTex = LoadCardTexture();
+		if (cardTex != null)
+		{
+			var bg = new TextureRect();
+			bg.Texture = cardTex;
+			bg.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+			bg.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			AddChild(bg);
+		}
+		else
+		{
+			var fallback = new ColorRect();
+			fallback.Color = new Color(0.08f, 0.08f, 0.12f, 0.95f);
+			fallback.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			AddChild(fallback);
+		}
 		
 		// 点击事件
 		Pressed += OnCardPressed;
+	}
+
+	private Texture2D LoadCardTexture()
+	{
+		// 使用卡牌名称匹配资源文件名（需要与 Assets/UI/Combat 下的图片一致）
+		var safeName = CardData.Name.Trim();
+		var path = $"res://Assets/UI/Combat/{safeName}.png";
+		if (ResourceLoader.Exists(path))
+		{
+			return GD.Load<Texture2D>(path);
+		}
+		return null;
 	}
 	
 	private void OnCardPressed()

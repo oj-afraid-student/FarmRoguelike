@@ -177,6 +177,27 @@ public class CropEffectData
     // 遗忘效果
     public int CardsToRemove { get; set; } = 0; // 删除卡牌数量
     public List<string> StatToRemove { get; set; } = new(); // 要移除的属性（暂时不用）
+
+    // 扩展效果：用于存放“下场战斗生效”“条件触发”等配置
+    public Dictionary<string, float> ConditionalModifiers { get; set; } = new();
+    public Dictionary<string, float> NextBattleModifiers { get; set; } = new();
+    public List<string> GrantedStatuses { get; set; } = new();
+    public List<string> GrantedCards { get; set; } = new();
+}
+
+// 状态效果定义（来自策划表 State.csv）
+[Serializable]
+public class StatusEffectData
+{
+    public string Id { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public string StackRule { get; set; }
+    public string Duration { get; set; }
+    public string Notes { get; set; }
+    public bool IsStackable { get; set; }
+    public int MaxStacks { get; set; }
+    public Dictionary<string, float> NumericParams { get; set; } = new();
 }
 
 // 作物奖励

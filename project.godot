@@ -26,6 +26,15 @@ UIManager="*uid://ps1un7gbc3ac"
 
 project/assembly_name="新建游戏项目"
 
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=3
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
 [input]
 
 "左"={

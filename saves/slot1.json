@@ -1,22 +1,22 @@
 {
   "Version": "1.0",
-  "SaveTime": "2026-03-03T09:32:58.933661+08:00",
+  "SaveTime": "2026-03-04T22:36:14.1959789+08:00",
   "PlayerData": {
     "MaxHealth": 100,
-    "CurrentHealth": 100,
+    "CurrentHealth": 99,
     "Attack": 10,
     "Defense": 5,
-    "ActionPoints": 3,
+    "Energy": 3,
     "Speed": 1,
     "Luck": 1,
-    "Gold": 70,
+    "Gold": 105,
     "Deck": [
-      "card_attack_basic",
-      "card_attack_basic",
-      "card_attack_basic",
-      "card_defend_basic",
-      "card_defend_basic",
-      "card_defend_basic"
+      "card_scythe_slash",
+      "card_hoe_smash",
+      "card_raise_tools",
+      "card_urgent_bandage",
+      "card_spray_pesticide",
+      "card_observe_weakness"
     ],
     "EquippedCards": [],
     "Inventory": {},
@@ -31,63 +31,65 @@
         "Index": 0,
         "IsOccupied": true,
         "CropId": "crop_attack_boost",
-        "PlantTime": "2026-03-03T09:32:51.6196902+08:00",
-        "GrowthProgress": 0.0027999056,
-        "IsReady": false,
+        "PlantTime": "2026-03-04T22:22:32.0880382+08:00",
+        "GrowthProgress": 1,
+        "IsReady": true,
         "Stage": 0
       },
       "1": {
         "Index": 1,
         "IsOccupied": true,
         "CropId": "crop_wheat",
-        "PlantTime": "2026-03-03T09:32:52.7978326+08:00",
-        "GrowthProgress": 0.0016829374,
-        "IsReady": false,
+        "PlantTime": "2026-03-04T22:27:33.3002344+08:00",
+        "GrowthProgress": 1,
+        "IsReady": true,
         "Stage": 0
       },
       "2": {
         "Index": 2,
         "IsOccupied": true,
-        "CropId": "crop_forget_major",
-        "PlantTime": "2026-03-03T09:32:54.4652918+08:00",
-        "GrowthProgress": 0,
+        "CropId": "crop_attack_boost",
+        "PlantTime": "2026-03-04T22:27:34.9605129+08:00",
+        "GrowthProgress": 0.8524398,
         "IsReady": false,
         "Stage": 0
       },
       "3": {
         "Index": 3,
-        "IsOccupied": false,
-        "CropId": null,
-        "PlantTime": null,
-        "GrowthProgress": 0,
+        "IsOccupied": true,
+        "CropId": "crop_curse_power",
+        "PlantTime": "2026-03-04T22:27:36.7810342+08:00",
+        "GrowthProgress": 0.5662704,
         "IsReady": false,
         "Stage": 0
       },
       "4": {
         "Index": 4,
-        "IsOccupied": false,
-        "CropId": null,
-        "PlantTime": null,
-        "GrowthProgress": 0,
-        "IsReady": false,
+        "IsOccupied": true,
+        "CropId": "crop_forget",
+        "PlantTime": "2026-03-04T22:27:39.0644646+08:00",
+        "GrowthProgress": 1,
+        "IsReady": true,
         "Stage": 0
       },
       "5": {
         "Index": 5,
-        "IsOccupied": false,
-        "CropId": null,
-        "PlantTime": null,
-        "GrowthProgress": 0,
+        "IsOccupied": true,
+        "CropId": "crop_forget_major",
+        "PlantTime": "2026-03-04T22:27:40.2504392+08:00",
+        "GrowthProgress": 0.42181164,
         "IsReady": false,
         "Stage": 0
       }
     },
-    "LastUpdateTime": "2026-03-03T09:32:58.9336657+08:00"
+    "LastUpdateTime": "2026-03-04T22:36:14.1959832+08:00"
   },
   "CropEffectData": {
     "ActiveEffects": []
   },
   "ResourceData": {
-    "Resources": {}
+    "Resources": {
+      "resource_water": 1
+    }
   }
 }

@@ -27,6 +27,10 @@ public partial class CombatSystem : Node2D
 	
 	private int _enemyPoisonStacks = 0;
 	private int _nextAttackDamageBonus = 0;
+
+	private Dictionary<string, CombatStatusRuntime> _playerStatuses = new();
+	private Dictionary<string, CombatStatusRuntime> _enemyStatuses = new();
+	private int _playerExciteDrawCountThisTurn = 0;
 	
 	private bool _isPlayerTurn = true;
 	private int _playerEnergy = 3;
@@ -35,6 +39,13 @@ public partial class CombatSystem : Node2D
 	private List<string> _playerHand = new List<string>();
 	private List<string> _playerDrawPile = new List<string>();
 	private List<string> _playerDiscardPile = new List<string>();
+
+	private class CombatStatusRuntime
+	{
+		public string Id;
+		public int Stacks;
+		public int RemainingTurns;
+	}
 	
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -79,6 +90,9 @@ public partial class CombatSystem : Node2D
 		_enemyAiStateIndex = 0;
 		_enemyPoisonStacks = 0;
 		_nextAttackDamageBonus = 0;
+		_playerStatuses.Clear();
+		_enemyStatuses.Clear();
+		_playerExciteDrawCountThisTurn = 0;
 		
 		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
 		if (dataManager != null)
@@ -114,6 +128,8 @@ public partial class CombatSystem : Node2D
 		
 		// 抽起始手牌
 		DrawStartingHand();
+
+		ApplyNextBattleStatusFromPermanentUpgrades();
 		
 		EmitSignal(SignalName.CombatStarted, enemyId);
 		
@@ -207,6 +223,18 @@ public partial class CombatSystem : Node2D
 			GD.Print($"能量不足，需要 {cardData.Cost} 能量");
 			return;
 		}
+
+		if (HasStatus(_playerStatuses, "silence") && cardData.Type != GameEnums.CardType.Attack)
+		{
+			GD.Print("沉默状态下不能使用技能/能力牌");
+			return;
+		}
+
+		if (HasStatus(_playerStatuses, "disarm") && cardData.Type == GameEnums.CardType.Attack)
+		{
+			GD.Print("缴械状态下不能使用攻击牌");
+			return;
+		}
 		
 		_playerHand.Remove(cardId);
 		_playerDiscardPile.Add(cardId);
@@ -214,6 +242,8 @@ public partial class CombatSystem : Node2D
 		
 		// 处理卡牌效果
 		ProcessCardEffect(cardId, targetId);
+
+		ApplyStatusAfterPlayCard();
 		
 		_eventBus.EmitCardPlayed(cardId, targetId);
 		
@@ -285,8 +315,21 @@ public partial class CombatSystem : Node2D
 					break;
 					
 				case "poison_stacks":
-				_enemyPoisonStacks += (int)effect.Value;
+				ApplyStatus(_enemyStatuses, "poison", (int)effect.Value, 3);
+				_enemyPoisonStacks = GetStatusStacks(_enemyStatuses, "poison");
 				GD.Print($"施加了 {(int)effect.Value} 层中毒，当前层数: {_enemyPoisonStacks}");
+				break;
+
+			case "strength":
+				ApplyStatus(_playerStatuses, "strength", (int)effect.Value, 1);
+				break;
+
+			case "ironwall":
+				ApplyStatus(_playerStatuses, "ironwall", (int)effect.Value, 2);
+				break;
+
+			case "lifesteal":
+				ApplyStatus(_playerStatuses, "lifesteal", 1, 2);
 				break;
 					
 				case "draw":
@@ -310,8 +353,15 @@ public partial class CombatSystem : Node2D
 	
 	private void ApplyDamageToEnemy(int damage)
 	{
-		int actualDamage = Math.Max(1, damage - _currentEnemyDefense);
+		int modifiedDamage = ApplyOutgoingDamageModifiers(damage, _playerStatuses);
+		modifiedDamage = ApplyIncomingDamageModifiers(modifiedDamage, _enemyStatuses);
+
+		bool ignoreDefense = HasStatus(_playerStatuses, "precision");
+		int enemyDefense = GetEffectiveEnemyDefense();
+		int actualDamage = ignoreDefense ? Math.Max(1, modifiedDamage) : Math.Max(1, modifiedDamage - enemyDefense);
 		_currentEnemyHealth -= actualDamage;
+
+		ApplyLifestealIfAny(actualDamage);
 		
 		if (_currentEnemyHealth <= 0)
 		{
@@ -325,6 +375,7 @@ public partial class CombatSystem : Node2D
 	
 	private void ApplyPoisonDamageToEnemy(int damage)
 	{
+		damage = ApplyIncomingDamageModifiers(damage, _enemyStatuses);
 		_currentEnemyHealth -= damage;
 		
 		if (_currentEnemyHealth <= 0)
@@ -397,6 +448,7 @@ public partial class CombatSystem : Node2D
 	
 	private void EndPlayerTurn()
 	{
+		ProcessTurnEndStatuses(isPlayer: true);
 		_isPlayerTurn = false;
 		_eventBus.EmitTurnEnded();
 		GD.Print("玩家回合结束");
@@ -418,21 +470,25 @@ public partial class CombatSystem : Node2D
 	private void StartEnemyTurn()
 	{
 		GD.Print("敌人回合开始");
-		
-		if (_enemyPoisonStacks > 0)
-		{
-			int poisonDamage = _enemyPoisonStacks;
-			GD.Print($"目标中毒，受到 {poisonDamage} 点伤害！");
-			ApplyPoisonDamageToEnemy(poisonDamage);
-		}
+
+		ProcessTurnStartStatuses(isPlayer: false);
 
 		if (_currentEnemyHealth <= 0)
 		{
 			return; // 敌人被毒死，回合中止
 		}
+
+		if (TryConsumeSkipTurn(_enemyStatuses))
+		{
+			GD.Print("敌人因控制效果跳过行动");
+			ProcessTurnEndStatuses(isPlayer: false);
+			StartPlayerTurn();
+			return;
+		}
 		
 		// 敌人攻击玩家
 		EnemyAttack();
+		ProcessTurnEndStatuses(isPlayer: false);
 		
 		// 敌人回合结束后开始玩家回合
 		StartPlayerTurn();
@@ -469,7 +525,8 @@ public partial class CombatSystem : Node2D
 		switch (currentAction.ToLower())
 		{
 			case "attack":
-				int damage = _currentEnemyAttack;
+					int damage = ApplyOutgoingDamageModifiers(_currentEnemyAttack, _enemyStatuses);
+					damage = ApplyIncomingDamageModifiers(damage, _playerStatuses);
 				// 应用玩家护甲
 				int actualDamage = Math.Max(0, damage - _playerDefenseThisTurn);
 				
@@ -488,6 +545,8 @@ public partial class CombatSystem : Node2D
 				{
 					GD.Print("玩家的护甲完全抵挡了敌人的攻击");
 				}
+
+					TryReflectDamage(actualDamage);
 				break;
 			
 			case "defend":
@@ -515,6 +574,15 @@ public partial class CombatSystem : Node2D
 	{
 		_isPlayerTurn = true;
 		_playerEnergy = 3; // 重置能量
+		_playerExciteDrawCountThisTurn = 0;
+		ProcessTurnStartStatuses(isPlayer: true);
+
+		if (TryConsumeSkipTurn(_playerStatuses))
+		{
+			GD.Print("玩家因控制效果跳过本回合");
+			EndPlayerTurn();
+			return;
+		}
 		
 		// 抽牌 改为每回合抽 4 张
 		for (int i = 0; i < 4; i++)
@@ -572,6 +640,16 @@ public partial class CombatSystem : Node2D
 	{
 		return _playerEnergy;
 	}
+
+	public int GetDrawPileCount()
+	{
+		return _playerDrawPile.Count;
+	}
+
+	public int GetDiscardPileCount()
+	{
+		return _playerDiscardPile.Count;
+	}
 	
 	public (int current, int max) GetEnemyHealth()
 	{
@@ -587,5 +665,193 @@ public partial class CombatSystem : Node2D
 	public bool IsPlayerTurn()
 	{
 		return _isPlayerTurn;
+	}
+
+	private void ApplyStatus(Dictionary<string, CombatStatusRuntime> targetStatuses, string statusId, int stacks, int duration)
+	{
+		if (stacks <= 0) return;
+		var data = GetStatusData(statusId);
+		if (targetStatuses.TryGetValue(statusId, out var status))
+		{
+			if (data != null && data.MaxStacks > 0)
+			{
+				status.Stacks = Math.Min(data.MaxStacks, status.Stacks + stacks);
+			}
+			else
+			{
+				status.Stacks += stacks;
+			}
+			status.RemainingTurns = Math.Max(status.RemainingTurns, duration);
+		}
+		else
+		{
+			targetStatuses[statusId] = new CombatStatusRuntime
+			{
+				Id = statusId,
+				Stacks = data != null && data.MaxStacks > 0 ? Math.Min(data.MaxStacks, stacks) : stacks,
+				RemainingTurns = duration
+			};
+		}
+	}
+
+	private bool HasStatus(Dictionary<string, CombatStatusRuntime> targetStatuses, string statusId)
+	{
+		return targetStatuses.TryGetValue(statusId, out var status) && status.Stacks > 0;
+	}
+
+	private int GetStatusStacks(Dictionary<string, CombatStatusRuntime> targetStatuses, string statusId)
+	{
+		return targetStatuses.TryGetValue(statusId, out var status) ? status.Stacks : 0;
+	}
+
+	private StatusEffectData GetStatusData(string statusId)
+	{
+		var dm = GetNodeOrNull<DataManager>("/root/DataManager");
+		return dm?.GetStatusEffect(statusId);
+	}
+
+	private int ApplyOutgoingDamageModifiers(int baseDamage, Dictionary<string, CombatStatusRuntime> attackerStatuses)
+	{
+		int damage = baseDamage;
+		damage += GetStatusStacks(attackerStatuses, "strength") * 3;
+		damage = Mathf.RoundToInt(damage * (1.0f - 0.1f * GetStatusStacks(attackerStatuses, "weak")));
+		return Math.Max(0, damage);
+	}
+
+	private int ApplyIncomingDamageModifiers(int baseDamage, Dictionary<string, CombatStatusRuntime> defenderStatuses)
+	{
+		int damage = Mathf.RoundToInt(baseDamage * (1.0f + 0.2f * GetStatusStacks(defenderStatuses, "vulnerable")));
+		return Math.Max(0, damage);
+	}
+
+	private int GetEffectiveEnemyDefense()
+	{
+		float defense = _currentEnemyDefense;
+		defense *= (1.0f + 0.5f * GetStatusStacks(_enemyStatuses, "ironwall"));
+		defense *= Math.Max(0.1f, 1.0f - 0.2f * GetStatusStacks(_enemyStatuses, "armor_break"));
+		return Math.Max(0, Mathf.RoundToInt(defense));
+	}
+
+	private void ApplyLifestealIfAny(int dealtDamage)
+	{
+		if (!HasStatus(_playerStatuses, "lifesteal") || _gameManager == null) return;
+		int healAmount = Math.Max(1, Mathf.RoundToInt(dealtDamage * 0.2f));
+		_gameManager.HealPlayer(healAmount);
+	}
+
+	private void TryReflectDamage(int actualDamageToPlayer)
+	{
+		if (actualDamageToPlayer <= 0) return;
+		if (!HasStatus(_playerStatuses, "reflect")) return;
+		ApplyPoisonDamageToEnemy(3);
+	}
+
+	private void ApplyStatusAfterPlayCard()
+	{
+		if (HasStatus(_playerStatuses, "curse") && _gameManager != null)
+		{
+			int curseDamage = 2 * Math.Max(1, GetStatusStacks(_playerStatuses, "curse"));
+			_gameManager.ApplyDamageToPlayer(curseDamage);
+		}
+
+		if (HasStatus(_playerStatuses, "excite") && _playerExciteDrawCountThisTurn < 2)
+		{
+			DrawCard();
+			_playerExciteDrawCountThisTurn++;
+		}
+	}
+
+	private bool TryConsumeSkipTurn(Dictionary<string, CombatStatusRuntime> statuses)
+	{
+		if (HasStatus(statuses, "stun"))
+		{
+			statuses.Remove("stun");
+			return true;
+		}
+		if (HasStatus(statuses, "freeze"))
+		{
+			var rng = new Random();
+			if (rng.NextDouble() <= 0.2)
+			{
+				statuses.Remove("freeze");
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void ProcessTurnStartStatuses(bool isPlayer)
+	{
+		var statuses = isPlayer ? _playerStatuses : _enemyStatuses;
+		int maxHealth = isPlayer ? (_playerData?.MaxHealth ?? 100) : _currentEnemyMaxHealth;
+
+		if (HasStatus(statuses, "poison"))
+		{
+			int stacks = GetStatusStacks(statuses, "poison");
+			int damage = Math.Max(1, Mathf.RoundToInt(maxHealth * 0.04f * stacks));
+			if (isPlayer)
+			{
+				_gameManager?.ApplyDamageToPlayer(damage);
+			}
+			else
+			{
+				ApplyPoisonDamageToEnemy(damage);
+			}
+		}
+
+		if (HasStatus(statuses, "vigor") && isPlayer)
+		{
+			int heal = Math.Max(1, 2 * GetStatusStacks(statuses, "vigor"));
+			_gameManager?.HealPlayer(heal);
+		}
+	}
+
+	private void ProcessTurnEndStatuses(bool isPlayer)
+	{
+		var statuses = isPlayer ? _playerStatuses : _enemyStatuses;
+		int maxHealth = isPlayer ? (_playerData?.MaxHealth ?? 100) : _currentEnemyMaxHealth;
+
+		if (HasStatus(statuses, "burn"))
+		{
+			int stacks = GetStatusStacks(statuses, "burn");
+			int damage = Math.Max(1, Mathf.RoundToInt(maxHealth * 0.08f * stacks));
+			if (isPlayer)
+			{
+				_gameManager?.ApplyDamageToPlayer(damage);
+			}
+			else
+			{
+				ApplyPoisonDamageToEnemy(damage);
+			}
+			statuses["burn"].Stacks = Math.Max(0, statuses["burn"].Stacks - 1);
+		}
+
+		var keys = new List<string>(statuses.Keys);
+		foreach (var key in keys)
+		{
+			var status = statuses[key];
+			if (status.RemainingTurns > 0)
+			{
+				status.RemainingTurns--;
+			}
+
+			if (status.Stacks <= 0 || status.RemainingTurns == 0)
+			{
+				statuses.Remove(key);
+			}
+		}
+	}
+
+	private void ApplyNextBattleStatusFromPermanentUpgrades()
+	{
+		if (_playerData?.PermanentUpgrades == null) return;
+		if (_playerData.PermanentUpgrades.TryGetValue("gain_strength_stacks", out var strength) && strength > 0)
+		{
+			ApplyStatus(_playerStatuses, "strength", (int)strength, 1);
+		}
+		if (_playerData.PermanentUpgrades.TryGetValue("gain_ironwall_stacks", out var ironwall) && ironwall > 0)
+		{
+			ApplyStatus(_playerStatuses, "ironwall", (int)ironwall, 2);
+		}
 	}
 }
