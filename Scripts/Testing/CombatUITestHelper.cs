@@ -81,7 +81,7 @@ public partial class CombatUITestHelper : Node
             return;
         }
 
-        int ap = _combatSystem.GetPlayerActionPoints();
+        int ap = _combatSystem.GetPlayerEnergy();
         GD.Print($"模拟一个玩家回合：当前行动点 {ap}，手牌 {hand.Count} 张。");
 
         // 依次打出手牌，直到行动点用完或没有牌
