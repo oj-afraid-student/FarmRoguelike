@@ -13,32 +13,93 @@ public partial class DataManager : Node
     // 简单测试数据
     private void InitializeTestData()
     {
-        // 测试卡牌数据
-        _cards["card_attack_basic"] = new CardData
-        {
-            Id = "card_attack_basic",
-            Name = "基础攻击",
-            Description = "造成基础伤害",
-            Type = GameEnums.CardType.Attack,
-            Cost = 1,
-            Effects = new Dictionary<string, float> { { "damage", 6 } }
-        };
-        
-        _cards["card_defend_basic"] = new CardData
-        {
-            Id = "card_defend_basic",
-            Name = "基础防御",
-            Description = "获得防御",
-            Type = GameEnums.CardType.Skill,
-            Cost = 1,
-            Effects = new Dictionary<string, float> { { "defense", 5 } }
-        };
+		// 测试卡牌数据（战斗六张基础牌）
+		_cards["card_scythe_slash"] = new CardData
+		{
+			Id = "card_scythe_slash",
+			Name = "镰刀挥砍",
+			Description = "造成 7 点伤害。",
+			Type = GameEnums.CardType.Attack,
+			Cost = 1,
+			Effects = new Dictionary<string, float>
+			{
+				{ "damage", 7 }
+			}
+		};
+
+		_cards["card_hoe_smash"] = new CardData
+		{
+			Id = "card_hoe_smash",
+			Name = "锄头猛击",
+			Description = "造成 12 点伤害，并获得 1 点行动力。",
+			Type = GameEnums.CardType.Attack,
+			Cost = 1,
+			Effects = new Dictionary<string, float>
+			{
+				{ "damage", 12 },
+				{ "gain_ap", 1 }
+			}
+		};
+
+		_cards["card_raise_tools"] = new CardData
+		{
+			Id = "card_raise_tools",
+			Name = "架起农具",
+			Description = "本回合获得 6 点护盾。",
+			Type = GameEnums.CardType.Skill,
+			Cost = 1,
+			Effects = new Dictionary<string, float>
+			{
+				{ "block", 6 }
+			}
+		};
+
+		_cards["card_emergency_bandage"] = new CardData
+		{
+			Id = "card_emergency_bandage",
+			Name = "紧急包扎",
+			Description = "回复 4 点生命。",
+			Type = GameEnums.CardType.Skill,
+			Cost = 1,
+			Effects = new Dictionary<string, float>
+			{
+				{ "heal", 4 }
+			}
+		};
+
+		_cards["card_spray_pesticide"] = new CardData
+		{
+			Id = "card_spray_pesticide",
+			Name = "喷农药",
+			Description = "施加 1 层中毒，持续 2 回合。",
+			Type = GameEnums.CardType.Skill,
+			Cost = 1,
+			Effects = new Dictionary<string, float>
+			{
+				{ "poison_stacks", 1 },
+				{ "poison_turns", 2 }
+			}
+		};
+
+		_cards["card_observe_weakness"] = new CardData
+		{
+			Id = "card_observe_weakness",
+			Name = "观察弱点",
+			Description = "抽 1 张牌，下张攻击牌伤害 +4。",
+			Type = GameEnums.CardType.Skill,
+			Cost = 1,
+			Effects = new Dictionary<string, float>
+			{
+				{ "draw", 1 },
+				{ "next_attack_bonus", 4 }
+			}
+		};
         
         // 测试敌人数据
         _enemies["enemy_slime"] = new EnemyData
         {
             Id = "enemy_slime",
-            Name = "史莱姆",
+            Name = "工蝗",
             Health = 30,
             Attack = 5,
             Defense = 0

@@ -1,7 +1,324 @@
 [gd_scene format=3 uid="uid://cvsaoflkg0s2k"]
 
-[node name="Control" type="Control" unique_id=1282204583]
+[ext_resource type="Script" uid="uid://o51oi4a8gifw" path="res://Scripts/UI/CombatUIDeckTest.cs" id="1_8p4kd"]
+[ext_resource type="Texture2D" uid="uid://by1mqaip1fqdm" path="res://Assets/UI/Combat/战斗背景(1).png" id="1_315rb"]
+[ext_resource type="Texture2D" uid="uid://bvq434qxlmmx2" path="res://Assets/UI/Combat/hp条(1).png" id="2_315rb"]
+[ext_resource type="Texture2D" uid="uid://crjw77iwa7op2" path="res://Assets/UI/Combat/hp条红.png" id="3_r25bt"]
+[ext_resource type="Texture2D" uid="uid://b62qxohr5vpn8" path="res://Assets/UI/Combat/enemy_slime.png" id="4_8p4kd"]
+
+[sub_resource type="Theme" id="Theme_combat_large_font"]
+default_font_size = 22
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_r25bt"]
+load_path = "res://.godot/imported/镰刀挥砍.png-8358b3ad459912bce92e03215d751fc8.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_8p4kd"]
+load_path = "res://.godot/imported/锄头猛击.png-4c032a15ebd9ff0240addf8392d22f16.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_8263t"]
+load_path = "res://.godot/imported/架起农具.png-02e2a50ec3ee35e29c91b9c8e911d48d.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_yuknn"]
+load_path = "res://.godot/imported/紧急包扎.png-d685f25fe65e93599006612cceebf6c6.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_swtwy"]
+load_path = "res://.godot/imported/喷农药.png-782ab0972bac19b7caf021a89a4825b6.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_f6txx"]
+load_path = "res://.godot/imported/观察弱点.png-cf42f8913aebe2b29dc35964e8d5179c.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_fwh4o"]
+load_path = "res://.godot/imported/玩家图标.png-4949cca23cb2eff33f7a77d922827038.ctex"
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_8263t"]
+texture = ExtResource("2_315rb")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_yuknn"]
+texture = ExtResource("3_r25bt")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_swtwy"]
+texture = ExtResource("2_315rb")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_f6txx"]
+texture = ExtResource("3_r25bt")
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_315rb"]
+load_path = "res://.godot/imported/deck_draw_pile.png-d9a2bb8b512d5c9439ff907e68f92541.ctex"
+
+[node name="CombatUI" type="Control" unique_id=1282204583 node_paths=PackedStringArray("_drawPileIcon", "_drawPileLabel", "_handContainer")]
 layout_mode = 3
-anchors_preset = 0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_combat_large_font")
+script = ExtResource("1_8p4kd")
+_drawPileIcon = NodePath("MainVBox/BottomPanel/DeckInfoBar/DrawPileIcon")
+_drawPileLabel = NodePath("MainVBox/BottomPanel/DeckInfoBar/DrawPileLabel")
+_handContainer = NodePath("MainVBox/BottomPanel/DeckInfoBar/HandArea/HandContainer")
+_cardTextures = Array[Texture2D]([SubResource("CompressedTexture2D_r25bt"), SubResource("CompressedTexture2D_8p4kd"), SubResource("CompressedTexture2D_8263t"), SubResource("CompressedTexture2D_yuknn"), SubResource("CompressedTexture2D_swtwy"), SubResource("CompressedTexture2D_f6txx")])
+
+[node name="Background" type="TextureRect" parent="." unique_id=853534042]
+layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
+texture = ExtResource("1_315rb")
+
+[node name="MainVBox" type="VBoxContainer" parent="." unique_id=1805843643]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TopBar" type="HBoxContainer" parent="MainVBox" unique_id=685506215]
+layout_mode = 2
+
+[node name="BattleTitleLabel" type="Label" parent="MainVBox/TopBar" unique_id=2131883005]
+layout_mode = 2
+text = "战斗回合"
+
+[node name="TopBarSpacer" type="Control" parent="MainVBox/TopBar" unique_id=1464342779]
+layout_mode = 2
+
+[node name="FloorLabel" type="Label" parent="MainVBox/TopBar" unique_id=113902789]
+layout_mode = 2
+text = "第1层"
+
+[node name="TurnLabel" type="Label" parent="MainVBox/TopBar" unique_id=959649517]
+layout_mode = 2
+text = "回合3"
+
+[node name="MiddleHBox" type="HBoxContainer" parent="MainVBox" unique_id=537826432]
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 1
+
+[node name="Control" type="Control" parent="MainVBox/MiddleHBox" unique_id=1685652820]
+custom_minimum_size = Vector2(200, 200)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PlayerPanel" type="VBoxContainer" parent="MainVBox/MiddleHBox" unique_id=1997734945]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayerFrame" type="PanelContainer" parent="MainVBox/MiddleHBox/PlayerPanel" unique_id=422250721]
+layout_mode = 2
+
+[node name="PlayerVBox" type="VBoxContainer" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame" unique_id=1407924852]
+layout_mode = 2
+
+[node name="PlayerNameLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=1750440831]
+layout_mode = 2
+text = "玩家"
+
+[node name="PlayerAvatar" type="TextureRect" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=1484268616]
+layout_mode = 2
+texture = SubResource("CompressedTexture2D_fwh4o")
+
+[node name="PlayerHPBarContainer" type="HBoxContainer" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=561878616]
+layout_mode = 2
+
+[node name="PlayerHPBar" type="ProgressBar" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerHPBarContainer" unique_id=634725289]
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxTexture_8263t")
+theme_override_styles/fill = SubResource("StyleBoxTexture_yuknn")
+
+[node name="PlayerHPText" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerHPBarContainer" unique_id=962751313]
+layout_mode = 2
+text = "生命值：50/50"
+
+[node name="PlayerArmorLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=761472438]
+layout_mode = 2
+text = "防御力：12"
+
+[node name="PlayerAPLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=1365645170]
+layout_mode = 2
+text = "行动力：3/3"
+
+[node name="Label" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=1077539446]
+layout_mode = 2
+text = "防御力：3"
+
+[node name="Label2" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=1654769789]
+layout_mode = 2
+text = "抽牌数：4"
+
+[node name="PlayerStatsHBox" type="HBoxContainer" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=1356388580]
+visible = false
+layout_mode = 2
+
+[node name="AttackIcon" type="TextureRect" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=1002030635]
+layout_mode = 2
+
+[node name="DefenseIcon" type="TextureRect" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=705216598]
+layout_mode = 2
+
+[node name="SpeedIcon" type="TextureRect" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=809523360]
+layout_mode = 2
+
+[node name="LuckIcon" type="TextureRect" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=1869690622]
+layout_mode = 2
+
+[node name="AttackValueLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=994243190]
+layout_mode = 2
+text = "攻击"
+
+[node name="DefenseValueLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=1713656968]
+layout_mode = 2
+text = "防御"
+
+[node name="SpeedValueLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=2083463683]
+layout_mode = 2
+text = "速度"
+
+[node name="LuckValueLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox/PlayerStatsHBox" unique_id=1074541567]
+layout_mode = 2
+text = "幸运"
+
+[node name="ActiveCropEffectsLabel" type="Label" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=1213103076]
+visible = false
+layout_mode = 2
+text = "作物效果"
+
+[node name="ActiveCropEffects" type="HBoxContainer" parent="MainVBox/MiddleHBox/PlayerPanel/PlayerFrame/PlayerVBox" unique_id=298611821]
+visible = false
+layout_mode = 2
+
+[node name="MiddleSpacer" type="Control" parent="MainVBox/MiddleHBox" unique_id=384729101]
+custom_minimum_size = Vector2(600, 600)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="EnemyPanel" type="VBoxContainer" parent="MainVBox/MiddleHBox" unique_id=19881805]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 2
+
+[node name="EnemyFrame" type="PanelContainer" parent="MainVBox/MiddleHBox/EnemyPanel" unique_id=1565897338]
+layout_mode = 2
+
+[node name="EnemyVBox" type="VBoxContainer" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame" unique_id=147407922]
+layout_mode = 2
+alignment = 2
+
+[node name="EnemyNameLabel" type="Label" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox" unique_id=621632787]
+layout_mode = 2
+text = "蝗虫"
+
+[node name="EnemyPortrait" type="TextureRect" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox" unique_id=33543889]
+layout_mode = 2
+texture = ExtResource("4_8p4kd")
+
+[node name="EnemyHPBarContainer" type="HBoxContainer" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox" unique_id=731936041]
+layout_mode = 2
+alignment = 2
+
+[node name="EnemyHPBar" type="ProgressBar" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox/EnemyHPBarContainer" unique_id=780164426]
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxTexture_swtwy")
+theme_override_styles/fill = SubResource("StyleBoxTexture_f6txx")
+
+[node name="EnemyHPText" type="Label" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox/EnemyHPBarContainer" unique_id=258487927]
+layout_mode = 2
+text = "HP：100/100"
+
+[node name="EnemyBuffsLabel" type="Label" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox" unique_id=1939237132]
+layout_mode = 2
+text = "状态"
+
+[node name="EnemyBuffs" type="HBoxContainer" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox" unique_id=99090934]
+layout_mode = 2
+alignment = 2
+
+[node name="EnemyInfo" type="Label" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox" unique_id=765115295]
+layout_mode = 2
+text = "敌人：工蝗"
+
+[node name="EnemyIntentHBox" type="HBoxContainer" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox" unique_id=417141968]
+layout_mode = 2
+alignment = 2
+
+[node name="EnemyIntentIcon" type="TextureRect" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox/EnemyIntentHBox" unique_id=954183947]
+layout_mode = 2
+
+[node name="EnemyIntentText" type="Label" parent="MainVBox/MiddleHBox/EnemyPanel/EnemyFrame/EnemyVBox/EnemyIntentHBox" unique_id=840489821]
+layout_mode = 2
+
+[node name="BottomPanel" type="VBoxContainer" parent="MainVBox" unique_id=1609867027]
+layout_mode = 2
+alignment = 1
+
+[node name="DeckInfoBar" type="HBoxContainer" parent="MainVBox/BottomPanel" unique_id=847043534]
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 2
+
+[node name="LeftSpacer" type="Control" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=833067907]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DrawPileIcon" type="TextureRect" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=128403904]
+custom_minimum_size = Vector2(80, 114)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+mouse_filter = 0
+texture = SubResource("CompressedTexture2D_315rb")
+
+[node name="DrawPileLabel" type="Label" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=1064013766]
+layout_mode = 2
+text = "牌堆5"
+
+[node name="HandArea" type="VBoxContainer" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=1972299856]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HandLabel" type="Label" parent="MainVBox/BottomPanel/DeckInfoBar/HandArea" unique_id=149378835]
+layout_mode = 2
+text = "手牌"
+
+[node name="HandContainer" type="HBoxContainer" parent="MainVBox/BottomPanel/DeckInfoBar/HandArea" unique_id=745927927]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=1723463686]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DiscardPileIcon" type="TextureRect" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=85730236]
+custom_minimum_size = Vector2(80, 114)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+texture = SubResource("CompressedTexture2D_315rb")
+
+[node name="DiscardPileLabel" type="Label" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=78775905]
+layout_mode = 2
+text = "弃牌堆8"
+
+[node name="Control" type="Control" parent="MainVBox/BottomPanel/DeckInfoBar" unique_id=38384381]
+layout_mode = 2
+
+[node name="ActionBarTopSpacer" type="Control" parent="MainVBox/BottomPanel" unique_id=592847361]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+
+[node name="ActionBar" type="HBoxContainer" parent="MainVBox/BottomPanel" unique_id=1035775831]
+layout_mode = 2
+alignment = 1
+
+[node name="UseItemButton" type="Button" parent="MainVBox/BottomPanel/ActionBar" unique_id=35832443]
+layout_mode = 2
+text = "使用道具"
+icon_alignment = 1
+vertical_icon_alignment = 2
+
+[node name="ActionBarSpacer" type="Control" parent="MainVBox/BottomPanel/ActionBar" unique_id=1279381796]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+
+[node name="EndTurnButton" type="Button" parent="MainVBox/BottomPanel/ActionBar" unique_id=970710953]
+layout_mode = 2
+text = "结束回合"
+icon_alignment = 1
+vertical_icon_alignment = 2
