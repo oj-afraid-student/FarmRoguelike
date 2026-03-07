@@ -42,6 +42,7 @@ public partial class UIManager : Control
 	[Export] private Label _actionPointsLabel;
 	[Export] private HBoxContainer _handContainer;
 	[Export] private ProgressBar _healthBar;
+	private ProgressBar _combatPlayerHealthBar;
 	private TextureButton _drawPileButton;
 	private TextureButton _discardPileButton;
 	private Label _drawPileLabel;
@@ -1170,7 +1171,7 @@ public partial class UIManager : Control
 		{
 			healthBar.CustomMinimumSize = new Vector2(240, 24);
 			playerStats.AddChild(healthBar);
-			_healthBar = healthBar;
+			_combatPlayerHealthBar = healthBar;
 		}
 		else
 		{
@@ -1876,10 +1877,16 @@ public partial class UIManager : Control
 		}
 		
 		// 更新生命值进度条
-		if (_healthBar != null)
+		if (IsInstanceValid(_healthBar))
 		{
 			_healthBar.MaxValue = playerData.MaxHealth;
 			_healthBar.Value = playerData.CurrentHealth;
+		}
+		
+		if (IsInstanceValid(_combatPlayerHealthBar))
+		{
+			_combatPlayerHealthBar.MaxValue = playerData.MaxHealth;
+			_combatPlayerHealthBar.Value = playerData.CurrentHealth;
 		}
 		
 		// 更新金币显示
@@ -1915,7 +1922,58 @@ public partial class UIManager : Control
 		}
 		if (IsInstanceValid(_combatPlayerEnergyLabel) && combatSys != null)
 		{
-			_combatPlayerEnergyLabel.Text = $"能量: {combatSys.GetPlayerEnergy()}";
+			string statusText = "";
+			
+			// 新增的特殊机制Buff优先显示
+			int curse = combatSys.GetPlayerStatusStacksPublic("curse");
+			if (curse > 0) statusText += $" 诅咒:{curse}层";
+			int frenzy = combatSys.GetPlayerStatusStacksPublic("frenzy");
+			if (frenzy > 0) statusText += $" 狂暴:{frenzy}层";
+			int focus = combatSys.GetPlayerStatusStacksPublic("focus");
+			if (focus > 0) statusText += $" 专注:{focus}层";
+			int elementalAffinity = combatSys.GetPlayerStatusStacksPublic("elemental_affinity");
+			if (elementalAffinity > 0) statusText += $" 元素亲和:{elementalAffinity}层";
+			int comboStance = combatSys.GetPlayerStatusStacksPublic("combo_stance");
+			if (comboStance > 0) statusText += $" 连击架势:{comboStance}层";
+			int extraTurn = combatSys.GetPlayerStatusStacksPublic("extra_turn");
+			if (extraTurn > 0) statusText += $" 时光沙漏发动!";
+
+			int poison = combatSys.GetPlayerStatusStacksPublic("poison");
+			if (poison > 0) statusText += $" 中毒:{poison}层";
+			int freeze = combatSys.GetPlayerStatusStacksPublic("freeze");
+			if (freeze > 0) statusText += $" 冰冻:{freeze}层";
+			int burn = combatSys.GetPlayerStatusStacksPublic("burn");
+			if (burn > 0) statusText += $" 燃烧:{burn}层";
+			int stun = combatSys.GetPlayerStatusStacksPublic("stun");
+			if (stun > 0) statusText += $" 眩晕:{stun}层";
+			int vulnerable = combatSys.GetPlayerStatusStacksPublic("vulnerable");
+			if (vulnerable > 0) statusText += $" 破甲:{vulnerable}层";
+			int strength = combatSys.GetPlayerStatusStacksPublic("strength");
+			if (strength > 0) statusText += $" 力量:{strength}层";
+			int precision = combatSys.GetPlayerStatusStacksPublic("precision");
+			if (precision > 0) statusText += $" 精准:{precision}层";
+			int lifesteal = combatSys.GetPlayerStatusStacksPublic("lifesteal");
+			if (lifesteal > 0) statusText += $" 嗜血:{lifesteal}层";
+			int vigor = combatSys.GetPlayerStatusStacksPublic("vigor");
+			if (vigor > 0) statusText += $" 活力:{vigor}层";
+			int weak = combatSys.GetPlayerStatusStacksPublic("weak");
+			if (weak > 0) statusText += $" 虚弱:{weak}层";
+			int ironwall = combatSys.GetPlayerStatusStacksPublic("ironwall");
+			if (ironwall > 0) statusText += $" 铁壁:{ironwall}层";
+			int reflect = combatSys.GetPlayerStatusStacksPublic("reflect");
+			if (reflect > 0) statusText += $" 反射:{reflect}层";
+			int inspire = combatSys.GetPlayerStatusStacksPublic("inspire");
+			if (inspire > 0) statusText += $" 振奋:{inspire}层";
+			int disarm = combatSys.GetPlayerStatusStacksPublic("disarm");
+			if (disarm > 0) statusText += $" 缴械:{disarm}层";
+			int silence = combatSys.GetPlayerStatusStacksPublic("silence");
+			if (silence > 0) statusText += $" 沉默:{silence}层";
+			int pacifist = combatSys.GetPlayerStatusStacksPublic("pacifist");
+			if (pacifist > 0) statusText += $" 和平:{pacifist}层";
+			
+			if (statusText != "") statusText = "\n状态:" + statusText;
+			
+			_combatPlayerEnergyLabel.Text = $"能量: {combatSys.GetPlayerEnergy()}{statusText}";
 		}
 		else
 		{
@@ -2061,6 +2119,7 @@ public partial class UIManager : Control
 		var popupContainer = new CenterContainer();
 		popupContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		popupContainer.MouseFilter = Control.MouseFilterEnum.Ignore;
+		popupContainer.ZIndex = 100; // 确保置于顶层
 		
 		var panel = new PanelContainer();
 		panel.MouseFilter = Control.MouseFilterEnum.Ignore;
@@ -2167,7 +2226,27 @@ public partial class UIManager : Control
 			var enemyData = _dataManager?.GetEnemy(enemyId);
 			if (enemyData != null)
 			{
-				enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}";
+				string statusText = "";
+				int poison = combatSys.GetEnemyStatusStacksPublic("poison");
+				if (poison > 0) statusText += $" 中毒:{poison}层";
+				int freeze = combatSys.GetEnemyStatusStacksPublic("freeze");
+				if (freeze > 0) statusText += $" 冰冻:{freeze}层";
+				int burn = combatSys.GetEnemyStatusStacksPublic("burn");
+				if (burn > 0) statusText += $" 燃烧:{burn}层";
+				int stun = combatSys.GetEnemyStatusStacksPublic("stun");
+				if (stun > 0) statusText += $" 眩晕:{stun}层";
+				int vulnerable = combatSys.GetEnemyStatusStacksPublic("vulnerable");
+				if (vulnerable > 0) statusText += $" 破甲:{vulnerable}层";
+				int weak = combatSys.GetEnemyStatusStacksPublic("weak");
+				if (weak > 0) statusText += $" 虚弱:{weak}层";
+				int disarm = combatSys.GetEnemyStatusStacksPublic("disarm");
+				if (disarm > 0) statusText += $" 缴械:{disarm}层";
+				int silence = combatSys.GetEnemyStatusStacksPublic("silence");
+				if (silence > 0) statusText += $" 沉默:{silence}层";
+				
+				if (statusText != "") statusText = "\n状态:" + statusText;
+				
+				enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}{statusText}";
 			}
 		}
 	}
@@ -2178,6 +2257,7 @@ public partial class UIManager : Control
 		UpdateHandCards();
 		// 卡牌可能会改变玩家的临时护甲/护盾，更新相关显示
 		UpdatePlayerStats();
+		UpdateCombatEnemyInfo();
 	}
 
 	private void OnPlayerDamaged(int damage)
@@ -2210,13 +2290,8 @@ public partial class UIManager : Control
 			{
 				ShowDamageEffect(damage, enemyInfo.GlobalPosition, true);
 				
-				// 获取战斗系统中的实时血量
-				var enemyData = _dataManager?.GetEnemy(enemyId);
-				var combatSys = GameRoot.Instance?.CombatSystem;
-				if (enemyData != null && combatSys != null)
-				{
-					enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}";
-				}
+				// 直接通过通用方法更新战斗信息UI，包含血量和附加状态字样显示
+				UpdateCombatEnemyInfo(enemyId);
 			}
 		}
 	}
@@ -2989,6 +3064,40 @@ public partial class CardUI : Button
 			fallback.Color = new Color(0.08f, 0.08f, 0.12f, 0.95f);
 			fallback.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 			AddChild(fallback);
+
+			var marginContainer = new MarginContainer();
+			marginContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			marginContainer.AddThemeConstantOverride("margin_left", 10);
+			marginContainer.AddThemeConstantOverride("margin_top", 10);
+			marginContainer.AddThemeConstantOverride("margin_right", 10);
+			marginContainer.AddThemeConstantOverride("margin_bottom", 10);
+			AddChild(marginContainer);
+
+			var container = new VBoxContainer();
+			marginContainer.AddChild(container);
+
+			var nameLabel = new Label();
+			nameLabel.Text = CardData.Name;
+			nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			nameLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			nameLabel.AddThemeFontSizeOverride("font_size", 20);
+			nameLabel.AddThemeColorOverride("font_color", Colors.Gold);
+			container.AddChild(nameLabel);
+
+			var costLabel = new Label();
+			costLabel.Text = $"能量: {CardData.Cost}";
+			costLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			costLabel.AddThemeColorOverride("font_color", Colors.Cyan);
+			container.AddChild(costLabel);
+
+			var descLabel = new Label();
+			descLabel.Text = CardData.Description;
+			descLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			descLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			descLabel.AddThemeFontSizeOverride("font_size", 14);
+			descLabel.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+			descLabel.VerticalAlignment = VerticalAlignment.Center;
+			container.AddChild(descLabel);
 		}
 		
 		// 点击事件
