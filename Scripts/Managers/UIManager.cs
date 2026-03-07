@@ -325,6 +325,9 @@ public partial class UIManager : Control
 		{
 			_currentMapUI = _mapUIScene.Instantiate<Control>();
 			_uiLayer.AddChild(_currentMapUI);
+
+			// 场景版地图 UI：绑定暂停按钮、方向键和左侧行动面板按钮
+			BindMapUISceneControls();
 		}
 		else
 		{
@@ -339,7 +342,55 @@ public partial class UIManager : Control
 		CallDeferred("_RefreshMapUI");
 		ShowNotification("探索地图中...");
 	}
-	
+
+	private void BindMapUISceneControls()
+	{
+		if (_currentMapUI == null) return;
+
+		// 顶部暂停按钮
+		var pauseButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/VBoxContainer/TopBar/PauseButton");
+		if (pauseButton != null)
+		{
+			pauseButton.Pressed += OnMapPauseButtonPressed;
+		}
+
+		// 方向键：上、下、左、右（放在左侧 ActionPanel 里）
+		var moveButtonsRoot = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons");
+		if (moveButtonsRoot != null)
+		{
+			var upButton = moveButtonsRoot.GetNodeOrNull<Button>("UpButton");
+			if (upButton != null) upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
+
+			var leftButton = moveButtonsRoot.GetNodeOrNull<Button>("LeftButton");
+			if (leftButton != null) leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
+
+			var rightButton = moveButtonsRoot.GetNodeOrNull<Button>("RightButton");
+			if (rightButton != null) rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
+
+			var downButton = moveButtonsRoot.GetNodeOrNull<Button>("DownButton");
+			if (downButton != null) downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
+		}
+
+		// 左侧行动面板按钮
+		var inspectButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons/InspectButton");
+		if (inspectButton != null)
+		{
+			inspectButton.Pressed += OnMapInspectButtonPressed;
+		}
+
+		var backToFarmButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons/BackToFarmButton");
+		if (backToFarmButton != null)
+		{
+			backToFarmButton.Pressed += OnMapBackToFarmButtonPressed;
+		}
+
+		var backToDeckButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons/BackToDeckButton");
+		if (backToDeckButton != null)
+		{
+			backToDeckButton.Pressed += OnMapBackToDeckButtonPressed;
+		}
+	}
+
 	private void _RefreshMapUI()
 	{
 		UpdateMapNavigation();
@@ -2571,7 +2622,7 @@ public partial class UIManager : Control
 		
 		var availableMoves = mapSystem.GetAvailableMoves();
 		
-		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/VBoxContainer/MoveButtons");
+		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons");
 		if (moveButtons != null)
 		{
 			var upButton = moveButtons.GetNodeOrNull<Button>("UpButton");
@@ -2590,23 +2641,17 @@ public partial class UIManager : Control
 	{
 		if (_currentMapUI == null) return;
 		var mapSystem = GameRoot.Instance?.MapSystem;
-		if (mapSystem == null) 
-		{
+		if (mapSystem == null)
 			return;
-		}
-		
+
 		var currentRoom = mapSystem.CurrentRoom;
-		if (currentRoom == null) 
-		{
+		if (currentRoom == null)
 			return;
-		}
-		
+
 		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/GridCenterer/MapGrid");
-		if (mapGrid == null) 
-		{
+		if (mapGrid == null)
 			return;
-		}
-		
+
 		// 获取地图尺寸 (通过向底层系统发请求，这里简化为根据当前层数计算出的默认大小，或者通过反射/扩展公开接口)
 		// 为了简单起见，既然层数影响尺寸：3 + Mathf.Min(floor / 3, 2);
 		int baseSize = 3;
@@ -2616,25 +2661,33 @@ public partial class UIManager : Control
 		int cellGap = (int)Mathf.Clamp(viewportSize.X * 0.006f, 6f, 12f);
 		float gridSpan = Mathf.Min(viewportSize.X * 0.34f, viewportSize.Y * 0.36f);
 		float cellSize = Mathf.Clamp((gridSpan - (mapSize - 1) * cellGap) / mapSize, 48f, 96f);
-		
+
 		mapGrid.Columns = mapSize;
 		mapGrid.AddThemeConstantOverride("h_separation", cellGap);
 		mapGrid.AddThemeConstantOverride("v_separation", cellGap);
-		
+
+		// 预加载格子图标（允许为空，作为纯色+文字兜底）
+		var texCurrent = TryLoadTexture("res://Assets/UI/Map/icon_current.png");
+		var texVisited = TryLoadTexture("res://Assets/UI/Map/icon_visited.png");
+		var texBoss = TryLoadTexture("res://Assets/UI/Map/icon_boss.png");
+		var texReward = TryLoadTexture("res://Assets/UI/Map/icon_reward.png");
+		var texTrap = TryLoadTexture("res://Assets/UI/Map/icon_trap.png");
+		var texReachable = TryLoadTexture("res://Assets/UI/Map/icon_reachable.png");
+
 		// 必须立即释放节点，否则 GridContainer 会因为 QueueFree 的延迟导致布局完全错乱并且把新节点挤出屏幕外
 		foreach (Node child in mapGrid.GetChildren())
 		{
 			mapGrid.RemoveChild(child);
 			child.Free();
 		}
-		
+
 		// 重新生成格子 (GridContainer 的子节点按行依次排列，所以外侧循环 Y，内侧循环 X)
 		for (int y = 0; y < mapSize; y++)
 		{
 			for (int x = 0; x < mapSize; x++)
 			{
 				var pos = new Vector2I(x, y);
-				
+
 				// 向 MapSystem 查询该点的房间状况
 				var roomDataInfo = mapSystem.GetType().GetMethod("GetRoom", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 				RoomData room = null;
@@ -2655,17 +2708,25 @@ public partial class UIManager : Control
 						}
 					}
 				}
-				
+
 				var cell = new ColorRect();
 				cell.CustomMinimumSize = new Vector2(cellSize, cellSize);
 
+				// 图标节点：覆盖整个格子，用来显示当前位置/已访问/特殊房间的图标
+				var icon = new TextureRect();
+				icon.Name = "Icon";
+				icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+				icon.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+				cell.AddChild(icon);
+
+				// 文字节点：作为兜底/调试用标记
 				var label = new Label();
 				label.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 				label.HorizontalAlignment = HorizontalAlignment.Center;
 				label.VerticalAlignment = VerticalAlignment.Center;
 				label.AddThemeFontSizeOverride("font_size", 15);
 				cell.AddChild(label);
-				
+
 				if (room == null)
 				{
 					// 越界或者无效
@@ -2673,39 +2734,45 @@ public partial class UIManager : Control
 				}
 				else
 				{
+					// 默认底色
+					cell.Color = new Color(0.3f, 0.3f, 0.3f, 1f); // 暗黑色
+
 					// 玩家当前所在
 					if (pos == currentRoom.Position)
 					{
 						cell.Color = new Color(0.8f, 0.8f, 0.2f, 1f); // 亮黄色
 						label.Text = "You";
-						label.AddThemeColorOverride("font_color", new Color(0,0,0,1));
+						label.AddThemeColorOverride("font_color", new Color(0, 0, 0, 1));
+						if (texCurrent != null)
+							icon.Texture = texCurrent;
 					}
 					// 已访问
 					else if (room.IsVisited)
 					{
 						cell.Color = new Color(0.2f, 0.6f, 0.2f, 1f); // 绿色
 						label.Text = "√";
+						if (texVisited != null)
+							icon.Texture = texVisited;
 					}
 					// 当前节点的相邻可访问节点
 					else if (currentRoom.Connections.Contains(pos))
 					{
 						cell.Color = new Color(0.6f, 0.6f, 0.6f, 1f); // 亮灰色
 						label.Text = "?";
+						if (texReachable != null)
+							icon.Texture = texReachable;
 					}
-					// 未相邻未访问
-					else
-					{
-						cell.Color = new Color(0.3f, 0.3f, 0.3f, 1f); // 暗黑色
-						label.Text = "";
-					}
-					
-					// 如果是特殊房间特殊标记
+
+					// 如果是特殊房间特殊标记（在“当前位置/已访问/邻接可走”逻辑基础上再叠加）
 					if (room.Type == GameEnums.RoomType.Boss)
 					{
 						label.Text = "B";
+						if (texBoss != null)
+							icon.Texture = texBoss;
+
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
-						   cell.Color = new Color(0.5f, 0.1f, 0.1f, 1f); // 暗红
+							cell.Color = new Color(0.5f, 0.1f, 0.1f, 1f); // 暗红
 						}
 					}
 					else if (room.Type == GameEnums.RoomType.Trap)
@@ -2713,6 +2780,8 @@ public partial class UIManager : Control
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
 							label.Text = "T";
+							if (texTrap != null)
+								icon.Texture = texTrap;
 							cell.Color = new Color(0.5f, 0.3f, 0.1f, 1f); // 橘黑/暗橙
 						}
 					}
@@ -2721,11 +2790,13 @@ public partial class UIManager : Control
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
 							label.Text = "R";
+							if (texReward != null)
+								icon.Texture = texReward;
 							cell.Color = new Color(0.1f, 0.5f, 0.5f, 1f); // 蓝绿
 						}
 					}
 				}
-				
+
 				mapGrid.AddChild(cell);
 			}
 		}
@@ -2792,6 +2863,42 @@ public partial class UIManager : Control
 			_gameManager.TogglePause(); // 先取消暂停状态，确保状态切换逻辑正常执行
 		}
 		OnMainMenuButtonPressed();
+	}
+
+	private void OnMapPauseButtonPressed()
+	{
+		if (_gameManager != null)
+		{
+			_gameManager.TogglePause();
+		}
+	}
+
+	private void OnMapInspectButtonPressed()
+	{
+		var mapSystem = GameRoot.Instance?.MapSystem;
+		var room = mapSystem?.CurrentRoom;
+		if (room == null)
+		{
+			ShowNotification("当前没有房间信息");
+			return;
+		}
+
+		var pos = room.Position;
+		var cleared = room.IsCleared ? "是" : "否";
+		ShowNotification($"房间[{pos.X},{pos.Y}] 类型: {room.Type} 已清理: {cleared}");
+	}
+
+	private void OnMapBackToFarmButtonPressed()
+	{
+		if (_gameManager != null)
+		{
+			_gameManager.ChangeState(GameEnums.GameState.Farming);
+		}
+	}
+
+	private void OnMapBackToDeckButtonPressed()
+	{
+		ShowNotification("返回牌组界面功能暂未实现");
 	}
 
 	private void OnCardClicked(CardUI cardUI)
