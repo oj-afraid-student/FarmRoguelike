@@ -1,0 +1,15 @@
+{
+  "Id": "enemy_locust_warrior",
+  "Name": "蝗虫武士",
+  "Health": 50,
+  "Attack": 7,
+  "Defense": 4,
+  "Abilities": [
+    "啃咬：每回合攻击，造成7点伤害",
+    "固化：每3回合触发，获得6点护甲并强化下次攻击"
+  ],
+  "AiPattern": ["Bite", "Bite", "Harden"],
+  "RewardGold": 30,
+  "RewardExp": 20,
+  "RewardItems": ["item_warrior_blade_fragment"]
+}

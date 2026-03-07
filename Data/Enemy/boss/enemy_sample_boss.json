@@ -1,12 +1,17 @@
 {
   "Id": "enemy_sample_boss",
-  "Name": "深渊巨魔",
-  "Health": 350,
-  "Attack": 25,
+  "Name": "蝗虫母体·成体",
+  "Health": 100,
+  "Attack": 8,
   "Defense": 5,
-  "Abilities": ["cleave_attack", "regeneration"],
-  "AiPattern": ["Attack", "Attack", "Defend", "Debuff"],
-  "RewardGold": 150,
-  "RewardExp": 120,
-  "RewardItems": ["item_boss_core", "item_rare_potion"]
+  "Abilities": [
+    "啃咬：每回合攻击，造成8点伤害",
+    "召唤武士：触发虫群增益",
+    "腐蚀酸液：造成6点伤害并施加2层破甲",
+    "虫族意志：每次召唤后伤害+2"
+  ],
+  "AiPattern": ["Bite", "SummonWarrior", "CorrosiveAcid"],
+  "RewardGold": 90,
+  "RewardExp": 70,
+  "RewardItems": ["item_locust_core", "item_acid_sac"]
 }

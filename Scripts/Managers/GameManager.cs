@@ -4,6 +4,8 @@ using Godot;
 
 public partial class GameManager : Node
 {
+    private const int MaxFloor = 3;
+
     // 公开属性
     public GameEnums.GameState CurrentState { get; private set; } = GameEnums.GameState.MainMenu;
     public PlayerData PlayerData { get; private set; }
@@ -75,12 +77,12 @@ public partial class GameManager : Node
         PlayerData.Deck = new List<string>
         {
             // 原有基础牌
-            // "card_scythe_slash",
-            // "card_hoe_smash",
-            // "card_raise_tools",
-            // "card_urgent_bandage",
-            // "card_spray_pesticide",
-            // "card_observe_weakness",
+            "card_scythe_slash",
+            "card_hoe_smash",
+            "card_raise_tools",
+            "card_urgent_bandage",
+            "card_spray_pesticide",
+            "card_observe_weakness",
             
             // // 新增测试牌
             // "card_heavy_axe_strike",
@@ -147,6 +149,7 @@ public partial class GameManager : Node
         eventBus.CropEffectApplied += OnCropEffectApplied;
         eventBus.CropEffectRemoved += OnCropEffectRemoved;
         eventBus.RoomEntered += OnRoomEntered;
+        eventBus.FloorCompleted += OnFloorCompleted;
     }
     
     // 公共方法
@@ -338,7 +341,8 @@ public partial class GameManager : Node
                 break;
                 
             case GameEnums.RoomType.Boss:
-                var bossEnemy = _dataManager?.GetRandomBossEnemy();
+                string fixedBossId = GetBossEnemyIdForFloor(CurrentFloor);
+                var bossEnemy = _dataManager?.GetEnemy(fixedBossId) ?? _dataManager?.GetRandomBossEnemy();
                 if (bossEnemy != null)
                 {
                     string msg = $"[系统] 你遭遇了强大的Boss {bossEnemy.Name}！";
@@ -403,6 +407,45 @@ public partial class GameManager : Node
                 GameOver(false);
             }
         }
+    }
+
+    private void OnFloorCompleted(int floorNumber)
+    {
+        // 同步当前层，避免存档/UI与地图层不一致。
+        CurrentFloor = Math.Max(CurrentFloor, floorNumber);
+
+        if (floorNumber >= MaxFloor)
+        {
+            string finalMsg = $"[系统] 已击败第 {MaxFloor} 层 Boss，通关成功！";
+            GD.Print(finalMsg);
+            EventBus.Instance?.EmitNotificationRequested(finalMsg);
+            GameOver(true);
+            return;
+        }
+
+        CurrentFloor = floorNumber + 1;
+        string nextFloorMsg = $"[系统] 击败Boss，进入第 {CurrentFloor} 层。";
+        GD.Print(nextFloorMsg);
+        EventBus.Instance?.EmitNotificationRequested(nextFloorMsg);
+
+        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
+        EventBus.Instance?.EmitMapVisualsUpdateRequested();
+
+        if (CurrentState != GameEnums.GameState.GameOver)
+        {
+            ChangeState(GameEnums.GameState.MapExploration);
+        }
+    }
+
+    private string GetBossEnemyIdForFloor(int floor)
+    {
+        return floor switch
+        {
+            1 => "enemy_locust_matriarch_juvenile",
+            2 => "enemy_sample_boss",
+            3 => "enemy_dark_knight",
+            _ => "enemy_dark_knight"
+        };
     }
     
     private void OnCropHarvested(string cropId, int plotIndex, CropReward reward)

@@ -1,0 +1,17 @@
+{
+  "Id": "enemy_locust_matriarch_juvenile",
+  "Name": "蝗虫母体·幼体",
+  "Health": 60,
+  "Attack": 6,
+  "Defense": 3,
+  "Abilities": [
+    "啃咬：造成6点伤害",
+    "召唤工蝗：触发虫群增益",
+    "咆哮：每3回合释放，对玩家造成4点伤害并施加1层虚弱",
+    "狂暴：生命低于30%时攻击+4"
+  ],
+  "AiPattern": ["Bite", "SummonWorker", "RoarWeak"],
+  "RewardGold": 70,
+  "RewardExp": 50,
+  "RewardItems": ["item_juvenile_core", "item_queen_ichor"]
+}

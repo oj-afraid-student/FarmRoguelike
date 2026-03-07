@@ -1,11 +1,14 @@
 {
   "Id": "enemy_slime",
-  "Name": "史莱姆",
-  "Health": 30,
-  "Attack": 5,
+  "Name": "蝗虫幼虫",
+  "Health": 20,
+  "Attack": 4,
   "Defense": 0,
-  "AiPattern": ["Attack", "Defend", "Attack"],
-  "RewardGold": 15,
-  "RewardExp": 10,
-  "RewardItems": ["item_slime_fluid"]
+  "Abilities": [
+    "啃咬：每回合攻击，造成4点伤害"
+  ],
+  "AiPattern": ["Bite"],
+  "RewardGold": 12,
+  "RewardExp": 8,
+  "RewardItems": ["item_locust_shell"]
 }

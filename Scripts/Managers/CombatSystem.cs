@@ -22,8 +22,15 @@ public partial class CombatSystem : Node2D
 	private int _currentEnemyHealth = 100;
 	private int _currentEnemyMaxHealth = 100;
 	private int _currentEnemyAttack = 10;
+	private int _currentEnemyBaseAttack = 10;
 	private int _currentEnemyDefense = 0;
+	private int _currentEnemyBaseDefense = 0;
 	private int _enemyAiStateIndex = 0;
+	private int _enemySummonedCount = 0;
+	private bool _enemyEnraged = false;
+	private int _enemyPendingAttackBonus = 0;
+	private int _overlordEvolutionHitCounter = 0;
+	private int _overlordEvolutionStacks = 0;
 	
 	private int _enemyPoisonStacks = 0;
 
@@ -91,6 +98,11 @@ public partial class CombatSystem : Node2D
 		_playerEnergy = _playerData?.Energy ?? 3; // Use player's base energy
 		_playerDefenseThisTurn = 0;
 		_enemyAiStateIndex = 0;
+		_enemySummonedCount = 0;
+		_enemyEnraged = false;
+		_enemyPendingAttackBonus = 0;
+		_overlordEvolutionHitCounter = 0;
+		_overlordEvolutionStacks = 0;
 		_enemyPoisonStacks = 0;
 		_nextAttackDamageBonus = 0;
 		_playerStatuses.Clear();
@@ -109,7 +121,9 @@ public partial class CombatSystem : Node2D
 				_currentEnemyMaxHealth = enemyData.Health;
 				_currentEnemyHealth = enemyData.Health;
 				_currentEnemyAttack = enemyData.Attack;
+				_currentEnemyBaseAttack = enemyData.Attack;
 				_currentEnemyDefense = enemyData.Defense;
+				_currentEnemyBaseDefense = enemyData.Defense;
 			}
 			else
 			{
@@ -117,7 +131,9 @@ public partial class CombatSystem : Node2D
 				_currentEnemyHealth = 100;
 				_currentEnemyMaxHealth = 100;
 				_currentEnemyAttack = 10;
+				_currentEnemyBaseAttack = 10;
 				_currentEnemyDefense = 0;
+				_currentEnemyBaseDefense = 0;
 			}
 		}
 		else
@@ -126,7 +142,9 @@ public partial class CombatSystem : Node2D
 			_currentEnemyHealth = 100;
 			_currentEnemyMaxHealth = 100;
 			_currentEnemyAttack = 10;
+			_currentEnemyBaseAttack = 10;
 			_currentEnemyDefense = 0;
+			_currentEnemyBaseDefense = 0;
 		}
 		
 		// 初始化玩家卡组
@@ -595,6 +613,8 @@ public partial class CombatSystem : Node2D
 			_currentEnemyHealth = 0;
 			EnemyDefeated();
 		}
+
+		TryApplyOverlordEvolution();
 		
 		_eventBus.EmitEnemyDamaged(_currentEnemyId, actualDamage);
 		GD.Print($"对敌人造成 {actualDamage} 点伤害（包含护甲减免），敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
@@ -805,8 +825,9 @@ public partial class CombatSystem : Node2D
 			aiPattern = new List<string> { "Attack" };
 		}
 		
-		// 重置当前怪物的护甲值(可调整为不每回合重置，由具体游戏设计决定，此处配合防御动作通常只在本回合生效处理)
-		_currentEnemyDefense = 0;
+		// 每回合开始重置为基础防御值（可被防御动作临时提高）
+		_currentEnemyDefense = _currentEnemyBaseDefense;
+		TryApplyEnemyRagePassive();
 
 		string currentAction = aiPattern[_enemyAiStateIndex % aiPattern.Count];
 		_enemyAiStateIndex++;
@@ -815,35 +836,74 @@ public partial class CombatSystem : Node2D
 
 		switch (currentAction.ToLower())
 		{
+			case "bite":
 			case "attack":
-					int damage = ApplyOutgoingDamageModifiers(_currentEnemyAttack, _enemyStatuses);
-					damage = ApplyIncomingDamageModifiers(damage, _playerStatuses);
-				// 应用玩家护甲
-				int actualDamage = Math.Max(0, damage - _playerDefenseThisTurn);
-				
-				if (actualDamage > 0)
-				{
-					if (_gameManager != null)
-					{
-						_gameManager.ApplyDamageToPlayer(actualDamage);
-					}
-					else
-					{
-						GD.Print($"敌人对玩家造成 {actualDamage} 点伤害");
-					}
-				}
-				else
-				{
-					GD.Print("玩家的护甲完全抵挡了敌人的攻击");
-				}
+				ExecuteEnemyAttack(_currentEnemyAttack);
+				break;
 
-					TryReflectDamage(actualDamage);
+			case "poisonbite":
+				ExecuteEnemyAttack(_currentEnemyAttack);
+				ApplyStatus(_playerStatuses, "poison", 1, 2);
+				GD.Print("毒牙命中：玩家获得 1 层中毒(2回合)");
+				break;
+
+			case "toxicmist":
+				ApplyStatus(_playerStatuses, "poison", 2, 2);
+				GD.Print("毒雾扩散：玩家获得 2 层中毒(2回合)");
+				break;
+
+			case "photosynthesis":
+				EnemyHeal(5);
+				GD.Print("光合作用：敌人回复 5 点生命，本回合不攻击");
 				break;
 			
 			case "defend":
 				// 假设敌防时获得额外防御值
 				_currentEnemyDefense += 5;
 				GD.Print($"敌人采取防御姿态，获得 {_currentEnemyDefense} 点护甲。");
+				break;
+
+			case "harden":
+				_currentEnemyDefense += 6;
+				_enemyPendingAttackBonus += 2;
+				GD.Print("固化：获得 6 点护甲，下次攻击提升 2 点");
+				break;
+
+			case "roarweak":
+				ExecuteEnemyAttack(4);
+				ApplyStatus(_playerStatuses, "weak", 1, 1);
+				GD.Print("咆哮：对玩家施加 1 层虚弱");
+				break;
+
+			case "corrosiveacid":
+				ExecuteEnemyAttack(6);
+				ApplyStatus(_playerStatuses, "vulnerable", 2, 2);
+				GD.Print("腐蚀酸液：施加 2 层破甲(易伤)");
+				break;
+
+			case "injectvenom":
+				ExecuteEnemyAttack(5);
+				ApplyStatus(_playerStatuses, "poison", 2, 3);
+				ApplyStatus(_playerStatuses, "weak", 1, 3);
+				GD.Print("注入毒液：施加 2 层中毒与 1 层虚弱(3回合)");
+				break;
+
+			case "summonlarva":
+			case "summonworker":
+			case "summonwarrior":
+				if (_enemyEnraged && string.Equals(_currentEnemyId, "enemy_locust_matriarch_juvenile", StringComparison.OrdinalIgnoreCase))
+				{
+					GD.Print("幼体狂暴后不再召唤，改为啃咬。");
+					ExecuteEnemyAttack(_currentEnemyAttack);
+					break;
+				}
+				ApplySummonBuff();
+				break;
+
+			case "swarmstorm":
+				ExecuteEnemyAttack(5);
+				ApplySummonBuff();
+				GD.Print("虫族风暴：造成伤害并触发召唤增益");
 				break;
 
 			case "debuff":
@@ -859,6 +919,93 @@ public partial class CombatSystem : Node2D
 		
 		// 重置玩家本回合护甲
 		_playerDefenseThisTurn = 0;
+		_currentEnemyAttack = _currentEnemyBaseAttack;
+	}
+
+	private void ExecuteEnemyAttack(int baseDamage)
+	{
+		if (_enemyPendingAttackBonus > 0)
+		{
+			baseDamage += _enemyPendingAttackBonus;
+			GD.Print($"敌人获得固化加成，本次额外 +{_enemyPendingAttackBonus} 伤害");
+			_enemyPendingAttackBonus = 0;
+		}
+
+		int damage = ApplyOutgoingDamageModifiers(baseDamage, _enemyStatuses);
+		damage = ApplyIncomingDamageModifiers(damage, _playerStatuses);
+		int actualDamage = Math.Max(0, damage - _playerDefenseThisTurn);
+
+		if (actualDamage > 0)
+		{
+			if (_gameManager != null)
+			{
+				_gameManager.ApplyDamageToPlayer(actualDamage);
+			}
+			else
+			{
+				GD.Print($"敌人对玩家造成 {actualDamage} 点伤害");
+			}
+		}
+		else
+		{
+			GD.Print("玩家的护甲完全抵挡了敌人的攻击");
+		}
+
+		TryReflectDamage(actualDamage);
+	}
+
+	private void EnemyHeal(int healAmount)
+	{
+		if (healAmount <= 0) return;
+		_currentEnemyHealth = Math.Min(_currentEnemyMaxHealth, _currentEnemyHealth + healAmount);
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, 0);
+	}
+
+	private void ApplySummonBuff()
+	{
+		if (_enemySummonedCount >= 2)
+		{
+			GD.Print("召唤上限已达，未获得额外增益");
+			return;
+		}
+
+		_enemySummonedCount++;
+		_currentEnemyBaseAttack += 2;
+		GD.Print($"召唤增益触发：当前召唤计数 {_enemySummonedCount}/2，敌方基础攻击 +2");
+	}
+
+	private void TryApplyEnemyRagePassive()
+	{
+		if (_enemyEnraged) return;
+		if (!string.Equals(_currentEnemyId, "enemy_locust_matriarch_juvenile", StringComparison.OrdinalIgnoreCase)) return;
+		if (_currentEnemyMaxHealth <= 0) return;
+
+		float healthRatio = (float)_currentEnemyHealth / _currentEnemyMaxHealth;
+		if (healthRatio <= 0.30f)
+		{
+			_enemyEnraged = true;
+			_currentEnemyBaseAttack += 4;
+			GD.Print("蝗虫母体·幼体进入狂暴：基础攻击 +4，不再优先召唤。");
+		}
+	}
+
+	private void TryApplyOverlordEvolution()
+	{
+		if (!string.Equals(_currentEnemyId, "enemy_locust_matriarch_overlord", StringComparison.OrdinalIgnoreCase)) return;
+		if (_currentEnemyHealth <= 0) return;
+		if (_overlordEvolutionStacks >= 5) return;
+
+		_overlordEvolutionHitCounter++;
+		if (_overlordEvolutionHitCounter >= 10)
+		{
+			_overlordEvolutionHitCounter = 0;
+			_overlordEvolutionStacks++;
+			_currentEnemyBaseAttack += 2;
+			_currentEnemyBaseDefense += 2;
+			_currentEnemyAttack = _currentEnemyBaseAttack;
+			_currentEnemyDefense = _currentEnemyBaseDefense;
+			GD.Print($"主宰进化触发：攻击+2，防御+2（{_overlordEvolutionStacks}/5）");
+		}
 	}
 	
 	private void StartPlayerTurn()

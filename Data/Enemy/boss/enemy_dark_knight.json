@@ -1,12 +1,17 @@
 {
   "Id": "enemy_dark_knight",
-  "Name": "暗黑骑士",
-  "Health": 400,
-  "Attack": 30,
-  "Defense": 5,
-  "Abilities": ["shield_bash", "dark_slash"],
-  "AiPattern": ["Attack", "Defend", "Attack", "Debuff", "Attack"],
-  "RewardGold": 200,
-  "RewardExp": 150,
-  "RewardItems": ["item_boss_core", "item_dark_armor"]
+  "Name": "蝗虫母体·主宰",
+  "Health": 150,
+  "Attack": 10,
+  "Defense": 6,
+  "Abilities": [
+    "噬咬：每回合攻击，造成10点伤害",
+    "注入毒液：造成5点伤害并施加中毒2层和虚弱1层（3回合）",
+    "虫族风暴：造成5点伤害并触发虫群增益",
+    "进化：每受到10次攻击，攻击+2、防御+2（最多5次）"
+  ],
+  "AiPattern": ["Bite", "InjectVenom", "SwarmStorm"],
+  "RewardGold": 150,
+  "RewardExp": 120,
+  "RewardItems": ["item_locust_overlord_core", "item_queen_chitin"]
 }

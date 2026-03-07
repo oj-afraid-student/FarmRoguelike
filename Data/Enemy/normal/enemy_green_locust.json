@@ -1,0 +1,15 @@
+{
+  "Id": "enemy_green_locust",
+  "Name": "绿蝗",
+  "Health": 15,
+  "Attack": 2,
+  "Defense": 1,
+  "Abilities": [
+    "啃咬：每回合攻击，造成2点伤害",
+    "光合作用：每2回合触发，回复5点生命"
+  ],
+  "AiPattern": ["Bite", "Photosynthesis"],
+  "RewardGold": 10,
+  "RewardExp": 8,
+  "RewardItems": ["item_green_locust_leaf"]
+}

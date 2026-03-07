@@ -1,11 +1,15 @@
 {
   "Id": "enemy_goblin",
-  "Name": "哥布林",
-  "Health": 45,
-  "Attack": 8,
+  "Name": "工蝗",
+  "Health": 30,
+  "Attack": 3,
   "Defense": 2,
-  "AiPattern": ["Attack", "Attack", "Defend", "Attack"],
-  "RewardGold": 25,
-  "RewardExp": 15,
-  "RewardItems": ["item_goblin_ear"]
+  "Abilities": [
+    "啃咬：每回合攻击，造成3点伤害",
+    "召唤幼虫：每3回合使用一次，触发虫群增益"
+  ],
+  "AiPattern": ["Bite", "Bite", "SummonLarva"],
+  "RewardGold": 20,
+  "RewardExp": 12,
+  "RewardItems": ["item_worker_locust_wing"]
 }

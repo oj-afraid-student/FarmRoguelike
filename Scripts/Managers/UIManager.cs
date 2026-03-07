@@ -1121,7 +1121,8 @@ public partial class UIManager : Control
 	private void CreateDefaultCombatUI()
 	{
 		// 尽量使用已有 UI 素材（存在则使用贴图，否则退回为纯色背景）
-		var bgTexture = TryLoadTexture("res://Assets/UI/Combat/战斗背景(1).png");
+		var bgTexture = TryLoadTexture("res://Assets/UI/Combat/Card/战斗背景(1).png")
+			?? TryLoadTexture("res://Assets/UI/Combat/战斗背景(1).png");
 		Control root;
 		if (bgTexture != null)
 		{
@@ -1319,7 +1320,7 @@ public partial class UIManager : Control
 		// 右侧：敌人信息区域（先头像，再文字，确保与玩家头像同水平线）
 		var enemyPortrait = new TextureRect();
 		enemyPortrait.Name = "EnemyPortrait";
-		enemyPortrait.Texture = TryLoadTexture("res://Assets/UI/Combat/enemy_slime.png");
+		enemyPortrait.Texture = TryLoadTexture("res://Assets/UI/Combat/Enemy/蝗虫幼虫.png");
 		enemyPortrait.CustomMinimumSize = new Vector2(portraitSize, portraitSize);
 		enemyPortrait.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
 		enemyPortrait.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
@@ -2277,6 +2278,12 @@ public partial class UIManager : Control
 			var enemyData = _dataManager?.GetEnemy(enemyId);
 			if (enemyData != null)
 			{
+				var enemyPortrait = _currentCombatUI.FindChild("EnemyPortrait", true, false) as TextureRect;
+				if (enemyPortrait != null)
+				{
+					enemyPortrait.Texture = ResolveEnemyPortraitTexture(enemyId);
+				}
+
 				string statusText = "";
 				int poison = combatSys.GetEnemyStatusStacksPublic("poison");
 				if (poison > 0) statusText += $" 中毒:{poison}层";
@@ -2300,6 +2307,31 @@ public partial class UIManager : Control
 				enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}{statusText}";
 			}
 		}
+	}
+
+	private Texture2D ResolveEnemyPortraitTexture(string enemyId)
+	{
+		if (string.IsNullOrWhiteSpace(enemyId))
+		{
+			return TryLoadTexture("res://Assets/UI/Combat/Enemy/蝗虫幼虫.png");
+		}
+
+		string texturePath = enemyId switch
+		{
+			"enemy_slime" => "res://Assets/UI/Combat/Enemy/蝗虫幼虫.png",
+			"enemy_goblin" => "res://Assets/UI/Combat/Enemy/工蝗.png",
+			"enemy_green_locust" => "res://Assets/UI/Combat/Enemy/蝗虫幼虫.png",
+			"enemy_locust_warrior" => "res://Assets/UI/Combat/Enemy/蝗虫武士.png",
+			"enemy_venom_locust" => "res://Assets/UI/Combat/Enemy/毒液蝗.png",
+			"enemy_sample_boss" => "res://Assets/UI/Combat/Enemy/蝗虫母体幼体.png",
+			"enemy_locust_matriarch_juvenile" => "res://Assets/UI/Combat/Enemy/蝗虫母体幼体.png",
+			"enemy_locust_matriarch_adult" => "res://Assets/UI/Combat/Enemy/蝗虫母体幼体.png",
+			"enemy_dark_knight" => "res://Assets/UI/Combat/Enemy/蝗虫母体主宰.png",
+			"enemy_locust_matriarch_overlord" => "res://Assets/UI/Combat/Enemy/蝗虫母体主宰.png",
+			_ => "res://Assets/UI/Combat/Enemy/蝗虫幼虫.png"
+		};
+
+		return TryLoadTexture(texturePath) ?? TryLoadTexture("res://Assets/UI/Combat/Enemy/蝗虫幼虫.png");
 	}
 
 	private void OnCardPlayed(string cardId, string targetId)
@@ -2477,18 +2509,15 @@ public partial class UIManager : Control
 
 	private void OnBossDefeated(string enemyId)
 	{
-		// 始终延迟显示返回选项：记录待处理的 boss id，等待末影箱选择/关闭后再弹出。
-		_pendingBossDefeatedEnemyId = enemyId;
-		GD.Print("Boss 击败：已记录待处理状态，将在末影箱关闭后弹出返回农场对话");
+		// 楼层推进由 GameManager 自动处理，不再弹出“返回农场/地图”分支对话。
+		_pendingBossDefeatedEnemyId = null;
+		ShowNotification("Boss已击败，正在结算并准备进入下一层...");
 	}
 
 	private void OnEnderChestClosed()
 	{
-		if (!string.IsNullOrEmpty(_pendingBossDefeatedEnemyId))
-		{
-			ShowBossDefeatedDialog(_pendingBossDefeatedEnemyId);
-			_pendingBossDefeatedEnemyId = null;
-		}
+		// 保持接口以兼容事件回调；楼层推进已自动化。
+		_pendingBossDefeatedEnemyId = null;
 	}
 
 	private void ShowBossDefeatedDialog(string enemyId)
@@ -3171,40 +3200,6 @@ public partial class CardUI : Button
 			fallback.Color = new Color(0.08f, 0.08f, 0.12f, 0.95f);
 			fallback.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 			AddChild(fallback);
-
-			var marginContainer = new MarginContainer();
-			marginContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-			marginContainer.AddThemeConstantOverride("margin_left", 10);
-			marginContainer.AddThemeConstantOverride("margin_top", 10);
-			marginContainer.AddThemeConstantOverride("margin_right", 10);
-			marginContainer.AddThemeConstantOverride("margin_bottom", 10);
-			AddChild(marginContainer);
-
-			var container = new VBoxContainer();
-			marginContainer.AddChild(container);
-
-			var nameLabel = new Label();
-			nameLabel.Text = CardData.Name;
-			nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			nameLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-			nameLabel.AddThemeFontSizeOverride("font_size", 20);
-			nameLabel.AddThemeColorOverride("font_color", Colors.Gold);
-			container.AddChild(nameLabel);
-
-			var costLabel = new Label();
-			costLabel.Text = $"能量: {CardData.Cost}";
-			costLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			costLabel.AddThemeColorOverride("font_color", Colors.Cyan);
-			container.AddChild(costLabel);
-
-			var descLabel = new Label();
-			descLabel.Text = CardData.Description;
-			descLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-			descLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			descLabel.AddThemeFontSizeOverride("font_size", 14);
-			descLabel.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-			descLabel.VerticalAlignment = VerticalAlignment.Center;
-			container.AddChild(descLabel);
 		}
 		
 		// 点击事件
@@ -3213,13 +3208,32 @@ public partial class CardUI : Button
 
 	private Texture2D LoadCardTexture()
 	{
-		// 使用卡牌名称匹配资源文件名（需要与 Assets/UI/Combat 下的图片一致）
-		var safeName = CardData.Name.Trim();
-		var path = $"res://Assets/UI/Combat/{safeName}.png";
-		if (ResourceLoader.Exists(path))
+		var safeName = (CardData?.Name ?? string.Empty).Trim();
+		if (safeName.Length == 0)
 		{
-			return GD.Load<Texture2D>(path);
+			return null;
 		}
+
+		// 个别卡名与文件名存在差异，先做别名归一化。
+		if (safeName == "荆棘毒刃")
+		{
+			safeName = "荆棘毒刀";
+		}
+
+		var candidates = new List<string>
+		{
+			$"res://Assets/UI/Combat/Card/{safeName}.png",
+			$"res://Assets/UI/Combat/{safeName}.png"
+		};
+
+		foreach (var path in candidates)
+		{
+			if (ResourceLoader.Exists(path))
+			{
+				return GD.Load<Texture2D>(path);
+			}
+		}
+
 		return null;
 	}
 	

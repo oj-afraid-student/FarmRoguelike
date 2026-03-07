@@ -1,0 +1,15 @@
+{
+  "Id": "enemy_venom_locust",
+  "Name": "毒液蝗",
+  "Health": 40,
+  "Attack": 3,
+  "Defense": 2,
+  "Abilities": [
+    "毒牙：每回合攻击，造成3点伤害并施加1层中毒（2回合）",
+    "毒雾：每3回合触发，施加2层中毒（2回合）"
+  ],
+  "AiPattern": ["PoisonBite", "Bite", "ToxicMist"],
+  "RewardGold": 25,
+  "RewardExp": 18,
+  "RewardItems": ["item_venom_sac"]
+}
