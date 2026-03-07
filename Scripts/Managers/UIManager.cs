@@ -139,10 +139,10 @@ public partial class UIManager : Control
 			_farmUIScene = GD.Load<PackedScene>("res://UI/FarmUI.tscn");
 		}
 		
-		// if (ResourceLoader.Exists("res://UI/MapUI.tscn"))
-		// {
-		// 	_mapUIScene = GD.Load<PackedScene>("res://UI/MapUI.tscn");
-		// }
+		if (ResourceLoader.Exists("res://UI/MapUI.tscn"))
+		{
+			_mapUIScene = GD.Load<PackedScene>("res://UI/MapUI.tscn");
+		}
 		
 		// if (ResourceLoader.Exists("res://UI/RewardUI.tscn"))
 		// {
@@ -345,50 +345,7 @@ public partial class UIManager : Control
 
 	private void BindMapUISceneControls()
 	{
-		if (_currentMapUI == null) return;
-
-		// 顶部暂停按钮
-		var pauseButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/VBoxContainer/TopBar/PauseButton");
-		if (pauseButton != null)
-		{
-			pauseButton.Pressed += OnMapPauseButtonPressed;
-		}
-
-		// 方向键：上、下、左、右（放在左侧 ActionPanel 里）
-		var moveButtonsRoot = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons");
-		if (moveButtonsRoot != null)
-		{
-			var upButton = moveButtonsRoot.GetNodeOrNull<Button>("UpButton");
-			if (upButton != null) upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
-
-			var leftButton = moveButtonsRoot.GetNodeOrNull<Button>("LeftButton");
-			if (leftButton != null) leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
-
-			var rightButton = moveButtonsRoot.GetNodeOrNull<Button>("RightButton");
-			if (rightButton != null) rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
-
-			var downButton = moveButtonsRoot.GetNodeOrNull<Button>("DownButton");
-			if (downButton != null) downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
-		}
-
-		// 左侧行动面板按钮
-		var inspectButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons/InspectButton");
-		if (inspectButton != null)
-		{
-			inspectButton.Pressed += OnMapInspectButtonPressed;
-		}
-
-		var backToFarmButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons/BackToFarmButton");
-		if (backToFarmButton != null)
-		{
-			backToFarmButton.Pressed += OnMapBackToFarmButtonPressed;
-		}
-
-		var backToDeckButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons/BackToDeckButton");
-		if (backToDeckButton != null)
-		{
-			backToDeckButton.Pressed += OnMapBackToDeckButtonPressed;
-		}
+		// 暂时不对 MapUI.tscn 做额外绑定，保留你在场景里的自定义布局和交互。
 	}
 
 	private void _RefreshMapUI()
@@ -2657,7 +2614,7 @@ public partial class UIManager : Control
 		
 		var availableMoves = mapSystem.GetAvailableMoves();
 		
-		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons");
+		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/DPadCenterer/MoveButtons");
 		if (moveButtons != null)
 		{
 			var upButton = moveButtons.GetNodeOrNull<Button>("UpButton");

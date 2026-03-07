@@ -2,6 +2,7 @@
 
 [ext_resource type="Texture2D" uid="uid://cllpvruhm8ooq" path="res://Assets/UI/Combat/Card/锄头猛击.png" id="1_qbe4h"]
 
+
 [node name="CardUI" type="Control" unique_id=103098513]
 custom_minimum_size = Vector2(200, 285)
 layout_mode = 3
