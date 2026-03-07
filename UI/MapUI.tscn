@@ -1,7 +1,137 @@
 [gd_scene format=3 uid="uid://dhdi3x73jpivn"]
 
-[node name="Control" type="Control" unique_id=629803810]
+[ext_resource type="Texture2D" uid="uid://bcf1acobp3qlp" path="res://Assets/UI/Map/地图背景.png" id="1_y0geo"]
+
+[node name="Control" type="Control" unique_id=453003999]
 layout_mode = 3
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="TextureRect" parent="." unique_id=321487653]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_y0geo")
+stretch_mode = 5
+
+[node name="CenterBox" type="CenterContainer" parent="." unique_id=1236657740]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BgPanel" type="Control" parent="CenterBox" unique_id=1012669784]
+layout_mode = 2
+
+[node name="MarginBox" type="MarginContainer" parent="CenterBox/BgPanel" unique_id=880437175]
+layout_mode = 0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="ActionPanel" type="VBoxContainer" parent="CenterBox/BgPanel/MarginBox" unique_id=103866325]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ActionTitle" type="Label" parent="CenterBox/BgPanel/MarginBox/ActionPanel" unique_id=1100545597]
+layout_mode = 2
+text = "行动面板"
+horizontal_alignment = 1
+
+[node name="ActionButtons" type="VBoxContainer" parent="CenterBox/BgPanel/MarginBox/ActionPanel" unique_id=1339126060]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="InspectButton" type="Button" parent="CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons" unique_id=1889527337]
+layout_mode = 2
+text = "查看当前房间"
+
+[node name="BackToFarmButton" type="Button" parent="CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons" unique_id=215973264]
+layout_mode = 2
+text = "返回农场"
+
+[node name="BackToDeckButton" type="Button" parent="CenterBox/BgPanel/MarginBox/ActionPanel/ActionButtons" unique_id=1394094329]
+layout_mode = 2
+text = "返回牌组"
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterBox/BgPanel/MarginBox" unique_id=133183605]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="TopBar" type="HBoxContainer" parent="CenterBox/BgPanel/MarginBox/VBoxContainer" unique_id=1579635653]
+layout_mode = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="MapLabel" type="Label" parent="CenterBox/BgPanel/MarginBox/VBoxContainer/TopBar" unique_id=399602896]
+layout_mode = 2
+text = "地图探索界面"
+horizontal_alignment = 1
+
+[node name="PauseButton" type="Button" parent="CenterBox/BgPanel/MarginBox/VBoxContainer/TopBar" unique_id=1071690671]
+layout_mode = 2
+size_flags_horizontal = 8
+text = "暂停"
+
+[node name="RoomInfo" type="Label" parent="CenterBox/BgPanel/MarginBox/VBoxContainer" unique_id=314362251]
+layout_mode = 2
+text = "当前房间: ???"
+horizontal_alignment = 1
+
+[node name="GridCenterer" type="CenterContainer" parent="CenterBox/BgPanel/MarginBox/VBoxContainer" unique_id=667771245]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="MapGrid" type="GridContainer" parent="CenterBox/BgPanel/MarginBox/VBoxContainer/GridCenterer" unique_id=1699089459]
+layout_mode = 2
+columns = 3
+
+[node name="DPadCenterer" type="CenterContainer" parent="CenterBox/BgPanel/MarginBox/ActionPanel" unique_id=304344102]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MoveButtons" type="GridContainer" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer" unique_id=1635701054]
+layout_mode = 2
+columns = 3
+
+[node name="Spacer1" type="Control" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=735947234]
+layout_mode = 2
+
+[node name="UpButton" type="Button" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=167682990]
+layout_mode = 2
+text = "上"
+
+[node name="Spacer2" type="Control" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=1252758771]
+layout_mode = 2
+
+[node name="LeftButton" type="Button" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=1272256826]
+layout_mode = 2
+text = "左"
+
+[node name="CenterSpacer" type="Control" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=1525809421]
+layout_mode = 2
+
+[node name="RightButton" type="Button" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=711015348]
+layout_mode = 2
+text = "右"
+
+[node name="Spacer3" type="Control" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=1503706030]
+layout_mode = 2
+
+[node name="DownButton" type="Button" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=860773130]
+layout_mode = 2
+text = "下"
+
+[node name="Spacer4" type="Control" parent="CenterBox/BgPanel/MarginBox/ActionPanel/DPadCenterer/MoveButtons" unique_id=1267065829]
+layout_mode = 2

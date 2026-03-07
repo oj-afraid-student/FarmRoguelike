@@ -950,11 +950,11 @@ public partial class CombatSystem : Node2D
 		return (_currentEnemyHealth, _currentEnemyMaxHealth);
 	}
 	
-    // 返回玩家本回合的护甲/防御值（UI 显示用）
-    public int GetPlayerDefense()
-    {
-        return _playerDefenseThisTurn;
-    }
+	// 返回玩家本回合的护甲/防御值（UI 显示用）
+	public int GetPlayerDefense()
+	{
+		return _playerDefenseThisTurn;
+	}
 
 	public bool IsPlayerTurn()
 	{
