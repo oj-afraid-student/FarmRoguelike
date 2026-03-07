@@ -995,7 +995,11 @@ public partial class UIManager : Control
 	{
 		if (_cropSelectionContainer == null) return;
 		foreach (var child in _cropSelectionContainer.GetChildren()) child.QueueFree();
-		var allCrops = GameRoot.Instance?.DataManager?.GetAllCrops();
+		var allCrops = GameRoot.Instance?.GameManager?.GetUnlockedCropsForPlanting();
+		if (allCrops == null || allCrops.Count == 0)
+		{
+			allCrops = GameRoot.Instance?.DataManager?.GetAllCrops();
+		}
 		var title = new Label { Text = "选择要种植的作物:" };
 		title.AddThemeFontSizeOverride("font_size", 18);
 		_cropSelectionContainer.AddChild(title);
@@ -1003,7 +1007,7 @@ public partial class UIManager : Control
 		{
 			foreach (var crop in allCrops)
 			{
-				var btn = new Button { Text = $"{crop.Name}\n{crop.Description}" };
+				var btn = new Button { Text = $"{crop.Name} [{crop.Rarity}]\n{crop.Description}" };
 				btn.Pressed += () => OnCropSelected(plotIndex, crop.Id);
 				_cropSelectionContainer.AddChild(btn);
 			}
@@ -1363,7 +1367,9 @@ public partial class UIManager : Control
 		container.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		
 		// 添加背景图片
-		var bgTex = TryLoadTexture("res://Graphics/combat.png") ?? TryLoadTexture("res://Assets/UI/Combat/战斗背景(1).png");
+		var bgTex = TryLoadTexture("res://Assets/UI/Map/地图背景.png")
+			?? TryLoadTexture("res://Graphics/combat.png")
+			?? TryLoadTexture("res://Assets/UI/Combat/战斗背景(1).png");
 		var background = new TextureRect();
 		background.Texture = bgTex;
 		background.SetAnchorsPreset(Control.LayoutPreset.FullRect);

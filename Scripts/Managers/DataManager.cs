@@ -296,6 +296,8 @@ public partial class DataManager : Node
             Id = "card_hourglass", Name = "时光沙漏", Type = GameEnums.CardType.Skill, Cost = 2, Description = "本回合结束后，额外进行一次玩家回合（不重置临时BUFF）。",
             Effects = new Dictionary<string, float> { { "extra_turn_stacks", 1f } }
         };
+
+        InitializeCardAcquisitionData();
         
         // 测试作物数据 - 基础作物（无效果）
         _crops["crop_wheat"] = new CropData
@@ -303,6 +305,7 @@ public partial class DataManager : Node
             Id = "crop_wheat",
             Name = "小麦",
             Description = "立即回复10点生命",
+            Rarity = "普通",
             GrowthTimeSeconds = 30,
             Rewards = new CropReward
             {
@@ -319,6 +322,7 @@ public partial class DataManager : Node
             Id = "crop_health_boost",
             Name = "胡萝卜",
             Description = "永久增加3点最大生命",
+            Rarity = "普通",
             GrowthTimeSeconds = 45,
             Rewards = new CropReward
             {
@@ -341,6 +345,7 @@ public partial class DataManager : Node
             Id = "crop_attack_boost",
             Name = "辣椒",
             Description = "永久增加10%攻击力（建议最多触发7次）",
+            Rarity = "普通",
             GrowthTimeSeconds = 45,
             Rewards = new CropReward
             {
@@ -365,6 +370,7 @@ public partial class DataManager : Node
             Id = "crop_potato",
             Name = "土豆",
             Description = "收获获得30金币",
+            Rarity = "普通",
             GrowthTimeSeconds = 25,
             Rewards = new CropReward { Gold = 30 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -376,6 +382,7 @@ public partial class DataManager : Node
             Id = "crop_cactus",
             Name = "仙人掌",
             Description = "永久获得5点防御",
+            Rarity = "稀有",
             GrowthTimeSeconds = 50,
             Rewards = new CropReward { Gold = 20 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -393,6 +400,7 @@ public partial class DataManager : Node
             Id = "crop_sunflower",
             Name = "向日葵",
             Description = "增加1点行动力上限（最多+3）",
+            Rarity = "稀有",
             GrowthTimeSeconds = 60,
             Rewards = new CropReward { Gold = 25 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -414,6 +422,7 @@ public partial class DataManager : Node
             Id = "crop_garlic",
             Name = "大蒜",
             Description = "永久获得虚弱抗性（虚弱层数-1，建议最多1次）",
+            Rarity = "稀有",
             GrowthTimeSeconds = 50,
             Rewards = new CropReward { Gold = 25 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -433,6 +442,7 @@ public partial class DataManager : Node
             Id = "crop_curse_power",
             Name = "诅咒之藤",
             Description = "降低速度20%，提高攻击力30%",
+            Rarity = "稀有",
             GrowthTimeSeconds = 900, // 15分钟
             Rewards = new CropReward
             {
@@ -458,6 +468,7 @@ public partial class DataManager : Node
             Id = "crop_forget",
             Name = "遗忘花",
             Description = "可移除一张手牌或一项属性负面",
+            Rarity = "稀有",
             GrowthTimeSeconds = 90,
             Rewards = new CropReward
             {
@@ -476,6 +487,7 @@ public partial class DataManager : Node
             Id = "crop_forget_major",
             Name = "重生草",
             Description = "提供单局复活一次的资格（设计扩展字段）",
+            Rarity = "史诗",
             GrowthTimeSeconds = 120,
             Rewards = new CropReward
             {
@@ -497,6 +509,7 @@ public partial class DataManager : Node
             Id = "crop_rare_boss",
             Name = "金坷垃",
             Description = "所有属性+5%，并附带下一层敌人生命+20%的代价",
+            Rarity = "史诗",
             GrowthTimeSeconds = 90,
             Rewards = new CropReward
             {
@@ -524,6 +537,7 @@ public partial class DataManager : Node
             Id = "crop_speed_mushroom",
             Name = "加速菇",
             Description = "所有正在生长的作物进度+20%",
+            Rarity = "普通",
             GrowthTimeSeconds = 60,
             Rewards = new CropReward { Gold = 15 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -541,6 +555,7 @@ public partial class DataManager : Node
             Id = "crop_copy_melon",
             Name = "复制瓜",
             Description = "复制一张当前牌库中的随机卡牌",
+            Rarity = "稀有",
             GrowthTimeSeconds = 90,
             Rewards = new CropReward { Gold = 20 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -558,6 +573,7 @@ public partial class DataManager : Node
             Id = "crop_bravery_root",
             Name = "勇气根",
             Description = "下次战斗开始时获得2层力量",
+            Rarity = "普通",
             GrowthTimeSeconds = 900,
             Rewards = new CropReward { Gold = 15 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -575,6 +591,7 @@ public partial class DataManager : Node
             Id = "crop_patience_leaf",
             Name = "忍耐叶",
             Description = "下次战斗开始时获得1层铁壁",
+            Rarity = "普通",
             GrowthTimeSeconds = 900,
             Rewards = new CropReward { Gold = 15 },
             EffectType = GameEnums.CropEffectType.StatBoost,
@@ -585,6 +602,175 @@ public partial class DataManager : Node
                     { "gain_ironwall_stacks", 1f }
                 }
             }
+        };
+
+        // ===== 卡牌获取作物（来自 Plant.csv 卡牌作物段） =====
+        _crops["crop_power_fruit"] = new CropData
+        {
+            Id = "crop_power_fruit",
+            Name = "力量果",
+            Description = "随机获得重斧打击/锄头连击/破釜沉舟/破甲一击中的1张卡牌",
+            Rarity = "普通",
+            GrowthTimeSeconds = 30,
+            Rewards = new CropReward { Gold = 12 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_thorn"] = new CropData
+        {
+            Id = "crop_thorn",
+            Name = "荆棘",
+            Description = "随机获得荆棘护甲/荆棘毒刃中的1张卡牌",
+            Rarity = "普通",
+            GrowthTimeSeconds = 45,
+            Rewards = new CropReward { Gold = 12 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_thunder_vine"] = new CropData
+        {
+            Id = "crop_thunder_vine",
+            Name = "雷电藤",
+            Description = "获得雷霆一击卡牌",
+            Rarity = "史诗",
+            GrowthTimeSeconds = 120,
+            Rewards = new CropReward { Gold = 40 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_astragalus"] = new CropData
+        {
+            Id = "crop_astragalus",
+            Name = "黄芪",
+            Description = "随机获得精准斧击/振奋呐喊/净化中的1张卡牌",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 80,
+            Rewards = new CropReward { Gold = 20 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_blood_flower"] = new CropData
+        {
+            Id = "crop_blood_flower",
+            Name = "嗜血花",
+            Description = "随机获得嗜血术/嗜血打击/狂暴/连击架势中的1张卡牌",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 90,
+            Rewards = new CropReward { Gold = 24 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_unknown_herb"] = new CropData
+        {
+            Id = "crop_unknown_herb",
+            Name = "不知名草药",
+            Description = "随机获得草药汤/绷带/腐蚀液/药粉削弱中的1张卡牌",
+            Rarity = "普通",
+            GrowthTimeSeconds = 50,
+            Rewards = new CropReward { Gold = 10 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_mint"] = new CropData
+        {
+            Id = "crop_mint",
+            Name = "薄荷",
+            Description = "随机获得战术分析/干劲/专注中的1张卡牌",
+            Rarity = "普通",
+            GrowthTimeSeconds = 35,
+            Rewards = new CropReward { Gold = 10 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_mandrake_flower"] = new CropData
+        {
+            Id = "crop_mandrake_flower",
+            Name = "曼陀罗花",
+            Description = "获得恐惧尖叫卡牌",
+            Rarity = "史诗",
+            GrowthTimeSeconds = 120,
+            Rewards = new CropReward { Gold = 35 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_mandela_grass"] = new CropData
+        {
+            Id = "crop_mandela_grass",
+            Name = "曼德拉草",
+            Description = "随机获得声波冲击/尖叫恐吓中的1张卡牌",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 100,
+            Rewards = new CropReward { Gold = 20 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_mystic_mushroom"] = new CropData
+        {
+            Id = "crop_mystic_mushroom",
+            Name = "神秘蘑菇",
+            Description = "随机获得强力/火焰/寒冰/剧毒蘑菇中的一种",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 110,
+            Rewards = new CropReward { Gold = 24 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_strong_mushroom"] = new CropData
+        {
+            Id = "crop_strong_mushroom",
+            Name = "强力蘑菇",
+            Description = "随机获得镰刀收割/举起护盾/元素亲和中的1张卡牌",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 100,
+            Rewards = new CropReward { Gold = 24 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_fire_mushroom"] = new CropData
+        {
+            Id = "crop_fire_mushroom",
+            Name = "火焰蘑菇",
+            Description = "随机获得火焰喷射/元素亲和中的1张卡牌",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 100,
+            Rewards = new CropReward { Gold = 22 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_ice_mushroom"] = new CropData
+        {
+            Id = "crop_ice_mushroom",
+            Name = "寒冰蘑菇",
+            Description = "随机获得冰霜喷射/元素亲和中的1张卡牌",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 100,
+            Rewards = new CropReward { Gold = 22 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
+        };
+
+        _crops["crop_toxic_mushroom"] = new CropData
+        {
+            Id = "crop_toxic_mushroom",
+            Name = "剧毒蘑菇",
+            Description = "随机获得剧毒喷雾/元素亲和中的1张卡牌",
+            Rarity = "稀有",
+            GrowthTimeSeconds = 100,
+            Rewards = new CropReward { Gold = 22 },
+            EffectType = GameEnums.CropEffectType.StatBoost,
+            EffectData = new CropEffectData()
         };
     }
 
@@ -859,6 +1045,45 @@ public partial class DataManager : Node
     {
         return _cards.GetValueOrDefault(id);
     }
+
+    public List<string> GetStarterCardIds()
+    {
+        var result = new List<string>();
+        foreach (var card in _cards.Values)
+        {
+            if (string.Equals(card.AcquisitionMethod, "初始卡牌", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add(card.Id);
+            }
+        }
+        return result;
+    }
+
+    public List<string> GetUnlockableCardIdsByTriggers(IEnumerable<string> triggerKeywords, IEnumerable<string> alreadyUnlockedCardIds = null)
+    {
+        var result = new List<string>();
+        var unlockedSet = new HashSet<string>(alreadyUnlockedCardIds ?? new List<string>());
+        var triggers = NormalizeKeywords(triggerKeywords);
+
+        if (triggers.Count == 0)
+            return result;
+
+        foreach (var card in _cards.Values)
+        {
+            if (unlockedSet.Contains(card.Id))
+                continue;
+
+            if (string.Equals(card.AcquisitionMethod, "初始卡牌", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (IsAcquisitionMatched(card.AcquisitionMethod, triggers))
+            {
+                result.Add(card.Id);
+            }
+        }
+
+        return result;
+    }
     
     public EnemyData GetEnemy(string id)
     {
@@ -904,6 +1129,39 @@ public partial class DataManager : Node
         return new List<CropData>(_crops.Values);
     }
 
+    public List<CropData> GetCropsByRarity(string rarity)
+    {
+        var result = new List<CropData>();
+        foreach (var crop in _crops.Values)
+        {
+            if (string.Equals(crop.Rarity, rarity, StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add(crop);
+            }
+        }
+        return result;
+    }
+
+    public List<CropData> GetCardSourceCropsByRarity(string rarity)
+    {
+        var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "力量果", "荆棘", "雷电藤", "黄芪", "嗜血花", "不知名草药", "薄荷",
+            "曼陀罗花", "曼德拉草", "神秘蘑菇", "强力蘑菇", "火焰蘑菇", "寒冰蘑菇", "剧毒蘑菇"
+        };
+
+        var result = new List<CropData>();
+        foreach (var crop in _crops.Values)
+        {
+            if (!sourceNames.Contains(crop.Name))
+                continue;
+            if (!string.Equals(crop.Rarity, rarity, StringComparison.OrdinalIgnoreCase))
+                continue;
+            result.Add(crop);
+        }
+        return result;
+    }
+
     public StatusEffectData GetStatusEffect(string id)
     {
         return _statusEffects.GetValueOrDefault(id);
@@ -912,5 +1170,112 @@ public partial class DataManager : Node
     public List<StatusEffectData> GetAllStatusEffects()
     {
         return new List<StatusEffectData>(_statusEffects.Values);
+    }
+
+    private void InitializeCardAcquisitionData()
+    {
+        // 来源：策划 Card.csv（GBK）中的“稀有度/获取方式”
+        var meta = new Dictionary<string, (string rarity, string source)>
+        {
+            ["card_scythe_slash"] = ("基础", "初始卡牌"),
+            ["card_hoe_smash"] = ("基础", "初始卡牌"),
+            ["card_raise_tools"] = ("基础", "初始卡牌"),
+            ["card_urgent_bandage"] = ("基础", "初始卡牌"),
+            ["card_spray_pesticide"] = ("基础", "初始卡牌"),
+            ["card_observe_weakness"] = ("基础", "初始卡牌"),
+            ["card_heavy_axe_strike"] = ("普通", "使用力量果"),
+            ["card_hoe_combo"] = ("普通", "使用力量果"),
+            ["card_last_stand"] = ("普通", "使用力量果"),
+            ["card_scythe_harvest"] = ("稀有", "使用强力蘑菇"),
+            ["card_flame_spray"] = ("稀有", "使用火焰蘑菇"),
+            ["card_frost_spray"] = ("稀有", "使用寒冰蘑菇"),
+            ["card_thunder_strike"] = ("史诗", "使用雷电藤"),
+            ["card_thorn_poison_blade"] = ("普通", "使用荆棘"),
+            ["card_armor_break_strike"] = ("普通", "使用力量果"),
+            ["card_precision_axe"] = ("稀有", "提神薄荷"),
+            ["card_lifesteal_strike"] = ("稀有", "使用嗜血花"),
+            ["card_herbal_soup"] = ("普通", "使用不知名草药"),
+            ["card_bandage"] = ("普通", "使用不知名草药"),
+            ["card_thorn_armor"] = ("普通", "使用荆棘"),
+            ["card_corrosive_liquid"] = ("普通", "使用不知名草药"),
+            ["card_toxic_spray"] = ("稀有", "使用剧毒蘑菇"),
+            ["card_tactical_analysis"] = ("普通", "使用薄荷"),
+            ["card_motivation"] = ("普通", "使用薄荷"),
+            ["card_roaring_shout"] = ("稀有", "使用黄芪"),
+            ["card_raise_shield"] = ("稀有", "使用强力蘑菇"),
+            ["card_purify"] = ("稀有", "使用黄芪"),
+            ["card_weakening_powder"] = ("普通", "使用不知名草药"),
+            ["card_fearful_scream"] = ("史诗", "使用曼陀罗花"),
+            ["card_sonic_shock"] = ("稀有", "使用曼德拉草"),
+            ["card_intimidating_scream"] = ("稀有", "使用曼德拉草"),
+            ["card_frenzy"] = ("稀有", "使用嗜血花"),
+            ["card_focus"] = ("普通", "使用薄荷"),
+            ["card_bloodlust"] = ("稀有", "使用嗜血花"),
+            ["card_elemental_affinity"] = ("稀有", "使用火焰/寒冰/剧毒蘑菇"),
+            ["card_combo_stance"] = ("稀有", "使用嗜血花"),
+            ["card_devil_pact"] = ("普通", "恶魔果实"),
+            ["card_hourglass"] = ("史诗", "使用时光草")
+        };
+
+        foreach (var kv in meta)
+        {
+            if (_cards.TryGetValue(kv.Key, out var card))
+            {
+                card.Rarity = kv.Value.rarity;
+                card.AcquisitionMethod = kv.Value.source;
+            }
+        }
+    }
+
+    private static List<string> NormalizeKeywords(IEnumerable<string> keywords)
+    {
+        var result = new List<string>();
+        if (keywords == null)
+            return result;
+
+        foreach (var raw in keywords)
+        {
+            var normalized = NormalizeText(raw);
+            if (normalized.Length > 0)
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsAcquisitionMatched(string acquisitionMethod, List<string> normalizedTriggers)
+    {
+        var method = NormalizeText(acquisitionMethod);
+        if (method.Length == 0)
+            return false;
+
+        foreach (var trigger in normalizedTriggers)
+        {
+            if (trigger.Length == 0)
+                continue;
+
+            if (method.Contains(trigger, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (trigger.Contains(method, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string NormalizeText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var value = text.Trim();
+        value = value.Replace("（", "(").Replace("）", ")");
+        value = value.Replace("，", ",").Replace("。", ".");
+        value = value.Replace(" ", string.Empty);
+        value = value.Replace("\t", string.Empty);
+        return value;
     }
 }

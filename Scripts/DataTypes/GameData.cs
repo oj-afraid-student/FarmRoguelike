@@ -16,6 +16,8 @@ public class PlayerData
     public float Luck { get; set; } = 1.0f; // 幸运值影响掉落等
     public int Gold { get; set; } = 50; // 初始金币数量
     public List<string> Deck { get; set; } = new(); // 卡组中的卡牌ID列表
+    public List<string> UnlockedCards { get; set; } = new(); // 已解锁卡牌ID列表
+    public List<string> UnlockedCrops { get; set; } = new(); // 已解锁作物ID列表
     public List<string> EquippedCards { get; set; } = new();  // 当前装备的卡牌ID列表
     public Dictionary<string, int> Inventory { get; set; } = new();  // 物品ID及其数量
     public Dictionary<int, CropPlotData> Crops { get; set; } = new(); // 农作物地块数据
@@ -107,6 +109,8 @@ public class CardData
     public string Id { get; set; }
     public string Name { get; set; }
     public string Description { get; set; }
+    public string Rarity { get; set; } = "普通";
+    public string AcquisitionMethod { get; set; } = "未知";
     public GameEnums.CardType Type { get; set; }
     public int Cost { get; set; }
     public Dictionary<string, float> Effects { get; set; } = new();
@@ -154,6 +158,7 @@ public class CropData
     public string Id { get; set; }
     public string Name { get; set; }
     public string Description { get; set; } = ""; // 作物描述
+    public string Rarity { get; set; } = "普通";
     public float GrowthTimeSeconds { get; set; }
     public CropReward Rewards { get; set; }
 	public List<string> Stages { get; set; } = new();

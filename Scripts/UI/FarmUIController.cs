@@ -504,8 +504,12 @@ public partial class FarmUIController : Control
             child.QueueFree();
         }
         
-        // 获取所有可用作物
-        var allCrops = _dataManager.GetAllCrops();
+        // 优先显示已解锁作物，避免未获取作物提前出现
+        var allCrops = _gameManager?.GetUnlockedCropsForPlanting();
+        if (allCrops == null || allCrops.Count == 0)
+        {
+            allCrops = _dataManager.GetAllCrops();
+        }
         
         var titleLabel = new Label();
         titleLabel.Text = "选择要种植的作物:";
@@ -515,7 +519,7 @@ public partial class FarmUIController : Control
         foreach (var crop in allCrops)
         {
             var cropButton = new Button();
-            cropButton.Text = $"{crop.Name}\n{crop.Description}";
+            cropButton.Text = $"{crop.Name} [{crop.Rarity}]\n{crop.Description}";
             cropButton.Pressed += () => OnCropSelected(plotIndex, crop.Id);
             _cropSelectionContainer.AddChild(cropButton);
         }

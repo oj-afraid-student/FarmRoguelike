@@ -47,13 +47,20 @@ public partial class GameManager : Node
         PlayerData.Inventory = new Dictionary<string, int>(playerData.Inventory ?? new Dictionary<string, int>());
         PlayerData.Crops = new Dictionary<int, CropPlotData>(playerData.Crops ?? new Dictionary<int, CropPlotData>());
         PlayerData.PermanentUpgrades = new Dictionary<string, float>(playerData.PermanentUpgrades ?? new Dictionary<string, float>());
+        PlayerData.UnlockedCards = new List<string>(playerData.UnlockedCards ?? new List<string>());
+        PlayerData.UnlockedCrops = new List<string>(playerData.UnlockedCrops ?? new List<string>());
+
+        EnsureCardCollectionsConsistency();
+        EnsureCropCollectionsConsistency();
     }
     
     // 私有字段
     private DataManager _dataManager;
+    private readonly RandomNumberGenerator _rng = new RandomNumberGenerator();
     
     public override void _Ready()
     {
+        _rng.Randomize();
         InitializePlayerData();
         InitializeDataManager();
         SubscribeToEvents();
@@ -72,54 +79,32 @@ public partial class GameManager : Node
     private void InitializePlayerData()
     {
         PlayerData = new PlayerData();
-        
-        // 初始卡组
-        PlayerData.Deck = new List<string>
-        {
-            // 原有基础牌
-            "card_scythe_slash",
-            "card_hoe_smash",
-            "card_raise_tools",
-            "card_urgent_bandage",
-            "card_spray_pesticide",
-            "card_observe_weakness",
-            
-            // // 新增测试牌
-            // "card_heavy_axe_strike",
-            // "card_hoe_combo",
-            // "card_last_stand",
-            // "card_scythe_harvest",
-            // "card_flame_spray",
-            // "card_frost_spray",
-            // "card_thunder_strike",
-            // "card_thorn_poison_blade",
-            // "card_armor_break_strike",
-            // "card_precision_axe",
-            // "card_lifesteal_strike",
 
-            // "card_herbal_soup",
-            // "card_bandage",
-            // "card_thorn_armor",
-            // "card_corrosive_liquid",
-            // "card_toxic_spray",
-            // "card_tactical_analysis",
-            // "card_motivation",
-            // "card_roaring_shout",
-            // "card_raise_shield",
-            // "card_purify",
-            // "card_weakening_powder",
-            // "card_fearful_scream",
-            // "card_sonic_shock",
-            // "card_intimidating_scream",
-            
-            "card_frenzy",
-            "card_focus",
-            "card_bloodlust",
-            "card_elemental_affinity",
-            "card_combo_stance",
-            "card_devil_pact",
-            "card_hourglass"
+        var starterCards = _dataManager?.GetStarterCardIds();
+        if (starterCards == null || starterCards.Count == 0)
+        {
+            starterCards = new List<string>
+            {
+                "card_scythe_slash",
+                "card_hoe_smash",
+                "card_raise_tools",
+                "card_urgent_bandage",
+                "card_spray_pesticide",
+                "card_observe_weakness"
+            };
+        }
+
+        PlayerData.UnlockedCards = new List<string>(starterCards);
+        PlayerData.Deck = new List<string>(starterCards);
+        PlayerData.UnlockedCrops = new List<string>
+        {
+            "crop_wheat",
+            "crop_potato",
+            "crop_mint"
         };
+
+        EnsureCardCollectionsConsistency();
+        EnsureCropCollectionsConsistency();
     }
     
     private void InitializeDataManager()
@@ -150,6 +135,7 @@ public partial class GameManager : Node
         eventBus.CropEffectRemoved += OnCropEffectRemoved;
         eventBus.RoomEntered += OnRoomEntered;
         eventBus.FloorCompleted += OnFloorCompleted;
+        eventBus.CardPlayed += OnCardPlayed;
     }
     
     // 公共方法
@@ -252,6 +238,14 @@ public partial class GameManager : Node
     
     public void AddCardToDeck(string cardId)
     {
+        EnsureCardCollectionsConsistency();
+        if (PlayerData == null) return;
+
+        if (!PlayerData.UnlockedCards.Contains(cardId))
+        {
+            PlayerData.UnlockedCards.Add(cardId);
+        }
+
         if (!PlayerData.Deck.Contains(cardId))
         {
             PlayerData.Deck.Add(cardId);
@@ -374,9 +368,15 @@ public partial class GameManager : Node
         // 战斗系统已经负责发放奖励（读取怪物配置和给予金币/经验），这里可以处理后续流程
         GD.Print($"GameManager 检测到击败敌人 {enemyId}");
 
-        // 如果是 Boss，发出专门事件以便 UI 提供返回农场的选项
         var dm = GetNodeOrNull<DataManager>("/root/DataManager");
-        if (dm != null && dm.IsBossEnemy(enemyId))
+        bool isBoss = dm != null && dm.IsBossEnemy(enemyId);
+
+        TryGrantCropDropByRarity(isBoss);
+
+        TryUnlockCardsByTriggers(new[] { enemyId, $"击败{enemyId}", "击败Boss" });
+
+        // 如果是 Boss，发出专门事件以便 UI 提供返回农场的选项
+        if (isBoss)
         {
             EventBus.Instance?.EmitBossDefeated(enemyId);
         }
@@ -451,6 +451,17 @@ public partial class GameManager : Node
     private void OnCropHarvested(string cropId, int plotIndex, CropReward reward)
     {
         ApplyCropReward(reward);
+
+        var cropData = _dataManager?.GetCrop(cropId);
+        var cropName = cropData?.Name ?? cropId;
+        TryUnlockCardsByTriggers(new[]
+        {
+            cropId,
+            cropName,
+            $"使用{cropName}",
+            $"收获{cropName}",
+            "收获作物"
+        });
     }
     
     private void OnRewardSelected(RewardData reward)
@@ -474,6 +485,24 @@ public partial class GameManager : Node
     {
         GD.Print($"属性更新: {statType} = {value}");
     }
+
+    private void OnCardPlayed(string cardId, string targetId)
+    {
+        if (string.IsNullOrWhiteSpace(cardId))
+            return;
+
+        var card = _dataManager?.GetCard(cardId);
+        var cardName = card?.Name ?? cardId;
+
+        TryUnlockCardsByTriggers(new[]
+        {
+            cardId,
+            cardName,
+            $"使用{cardName}",
+            $"使用{cardId}",
+            "使用卡牌"
+        });
+    }
     
     private void ApplyCropReward(CropReward reward)
     {
@@ -495,6 +524,195 @@ public partial class GameManager : Node
                 GD.Print($"作物提供属性修改: {modifier.Key} * {modifier.Value}");
             }
         }
+    }
+
+    public List<string> UnlockCardsByAcquisitionAction(string actionKeyword)
+    {
+        return TryUnlockCardsByTriggers(new[] { actionKeyword, $"使用{actionKeyword}" });
+    }
+
+    private List<string> TryUnlockCardsByTriggers(IEnumerable<string> triggerKeywords)
+    {
+        EnsureCardCollectionsConsistency();
+
+        if (_dataManager == null || PlayerData == null)
+            return new List<string>();
+
+        var unlockedNow = _dataManager.GetUnlockableCardIdsByTriggers(triggerKeywords, PlayerData.UnlockedCards);
+        if (unlockedNow == null || unlockedNow.Count == 0)
+            return new List<string>();
+
+        foreach (var cardId in unlockedNow)
+        {
+            if (!PlayerData.UnlockedCards.Contains(cardId))
+            {
+                PlayerData.UnlockedCards.Add(cardId);
+            }
+
+            AddCardToDeck(cardId);
+            var cardData = _dataManager.GetCard(cardId);
+            var cardName = cardData?.Name ?? cardId;
+            EventBus.Instance?.EmitNotificationRequested($"[系统] 新卡牌已解锁: {cardName}");
+        }
+
+        return unlockedNow;
+    }
+
+    private void EnsureCardCollectionsConsistency()
+    {
+        if (PlayerData == null)
+            return;
+
+        if (PlayerData.Deck == null)
+        {
+            PlayerData.Deck = new List<string>();
+        }
+
+        if (PlayerData.UnlockedCards == null)
+        {
+            PlayerData.UnlockedCards = new List<string>();
+        }
+
+        foreach (var cardId in PlayerData.Deck)
+        {
+            if (!PlayerData.UnlockedCards.Contains(cardId))
+            {
+                PlayerData.UnlockedCards.Add(cardId);
+            }
+        }
+    }
+
+    private void EnsureCropCollectionsConsistency()
+    {
+        if (PlayerData == null)
+            return;
+
+        if (PlayerData.UnlockedCrops == null)
+        {
+            PlayerData.UnlockedCrops = new List<string>();
+        }
+
+        if (PlayerData.UnlockedCrops.Count == 0)
+        {
+            PlayerData.UnlockedCrops.Add("crop_wheat");
+            PlayerData.UnlockedCrops.Add("crop_potato");
+            PlayerData.UnlockedCrops.Add("crop_mint");
+        }
+    }
+
+    private void TryGrantCropDropByRarity(bool isBoss)
+    {
+        EnsureCropCollectionsConsistency();
+
+        if (_dataManager == null || PlayerData == null)
+            return;
+
+        string rolledRarity = RollCropRarity(isBoss);
+        var rarityOrder = GetRarityFallbackOrder(rolledRarity);
+
+        List<CropData> pool = null;
+        foreach (var rarity in rarityOrder)
+        {
+            var byRarity = _dataManager.GetCardSourceCropsByRarity(rarity);
+            if (byRarity != null && byRarity.Count > 0)
+            {
+                pool = byRarity;
+                rolledRarity = rarity;
+                break;
+            }
+        }
+
+        if (pool == null || pool.Count == 0)
+            return;
+
+        var newCropPool = new List<CropData>();
+        foreach (var crop in pool)
+        {
+            if (!PlayerData.UnlockedCrops.Contains(crop.Id))
+            {
+                newCropPool.Add(crop);
+            }
+        }
+
+        var finalPool = newCropPool.Count > 0 ? newCropPool : pool;
+        var selected = finalPool[(int)_rng.RandiRange(0, finalPool.Count - 1)];
+
+        bool isNewCrop = UnlockCrop(selected.Id);
+        if (!isNewCrop)
+        {
+            EventBus.Instance?.EmitNotificationRequested($"[系统] 击败敌人获得作物线索: {selected.Name}（{rolledRarity}）");
+        }
+    }
+
+    private string RollCropRarity(bool isBoss)
+    {
+        float roll = _rng.Randf();
+        if (isBoss)
+        {
+            if (roll < 0.30f) return "史诗";
+            if (roll < 0.75f) return "稀有";
+            return "普通";
+        }
+
+        if (roll < 0.05f) return "史诗";
+        if (roll < 0.30f) return "稀有";
+        return "普通";
+    }
+
+    private List<string> GetRarityFallbackOrder(string rarity)
+    {
+        if (string.Equals(rarity, "史诗", StringComparison.OrdinalIgnoreCase))
+            return new List<string> { "史诗", "稀有", "普通" };
+        if (string.Equals(rarity, "稀有", StringComparison.OrdinalIgnoreCase))
+            return new List<string> { "稀有", "普通" };
+        return new List<string> { "普通", "稀有", "史诗" };
+    }
+
+    public bool UnlockCrop(string cropId)
+    {
+        EnsureCropCollectionsConsistency();
+
+        if (string.IsNullOrWhiteSpace(cropId) || _dataManager == null || PlayerData == null)
+            return false;
+
+        var cropData = _dataManager.GetCrop(cropId);
+        if (cropData == null)
+            return false;
+
+        if (PlayerData.UnlockedCrops.Contains(cropId))
+            return false;
+
+        PlayerData.UnlockedCrops.Add(cropId);
+        EventBus.Instance?.EmitNotificationRequested($"[系统] 新作物已解锁: {cropData.Name}（{cropData.Rarity}）");
+        TryUnlockCardsByTriggers(new[]
+        {
+            cropId,
+            cropData.Name,
+            $"获得{cropData.Name}",
+            "获得作物"
+        });
+
+        return true;
+    }
+
+    public List<CropData> GetUnlockedCropsForPlanting()
+    {
+        EnsureCropCollectionsConsistency();
+
+        var result = new List<CropData>();
+        if (_dataManager == null || PlayerData == null)
+            return result;
+
+        foreach (var cropId in PlayerData.UnlockedCrops)
+        {
+            var crop = _dataManager.GetCrop(cropId);
+            if (crop != null)
+            {
+                result.Add(crop);
+            }
+        }
+
+        return result;
     }
     
     /// <summary>
@@ -559,6 +777,16 @@ public partial class GameManager : Node
     private void OnCropEffectApplied(string cropId)
     {
         GD.Print($"作物效果已应用: {cropId}");
+
+        var cropData = _dataManager?.GetCrop(cropId);
+        var cropName = cropData?.Name ?? cropId;
+        TryUnlockCardsByTriggers(new[]
+        {
+            cropId,
+            cropName,
+            $"使用{cropName}",
+            $"使用{cropId}"
+        });
     }
     
     private void OnCropEffectRemoved(string cropId)
@@ -592,8 +820,14 @@ public partial class GameManager : Node
             GD.PrintErr("EnderChestSystem 未找到");
             return false;
         }
-        
-        return enderChestSystem.SelectCrop(cropId);
+
+        bool selected = enderChestSystem.SelectCrop(cropId);
+        if (selected)
+        {
+            UnlockCrop(cropId);
+        }
+
+        return selected;
     }
     
     /// <summary>
