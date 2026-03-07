@@ -131,7 +131,19 @@ public partial class FarmingSystem : Node
         }
 
         var plot = _plots[plotIndex];
-        if (!plot.IsOccupied || !plot.IsReady)
+        if (!plot.IsOccupied)
+        {
+            GD.Print($"地块 {plotIndex} 没有可收获的作物");
+            return null;
+        }
+
+        // 尝试立即刷新生长状态（防止定时器尚未触发导致成熟状态未更新）
+        if (!plot.IsReady)
+        {
+            UpdateCropGrowth(plot, 0f);
+        }
+
+        if (!plot.IsReady)
         {
             GD.Print($"地块 {plotIndex} 没有可收获的作物");
             return null;
