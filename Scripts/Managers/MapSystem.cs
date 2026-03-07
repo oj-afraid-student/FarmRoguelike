@@ -13,6 +13,23 @@ public partial class MapSystem : Node
     
     public RoomData CurrentRoom => GetRoom(_currentPosition);
     public int CurrentFloor => _currentFloor;
+    public bool HasValidMap => _currentFloorMap != null
+        && _currentFloorMap.Count > 0
+        && _currentFloorMap[0] != null
+        && _currentFloorMap[0].Count > 0;
+
+    public Vector2I GetMapSize()
+    {
+        if (!HasValidMap)
+            return Vector2I.Zero;
+
+        return new Vector2I(_currentFloorMap.Count, _currentFloorMap[0].Count);
+    }
+
+    public RoomData GetRoomAt(Vector2I position)
+    {
+        return GetRoom(position);
+    }
 
     public void GenerateFloor(int floorNumber)
     {
@@ -103,6 +120,12 @@ public partial class MapSystem : Node
 
     public bool EnterRoom(Vector2I position)
     {
+        if (!HasValidMap)
+        {
+            GD.PrintErr("地图尚未生成，无法进入房间");
+            return false;
+        }
+
         var room = GetRoom(position);
         if (room == null)
         {
@@ -166,6 +189,9 @@ public partial class MapSystem : Node
 
     public List<Vector2I> GetAvailableMoves()
     {
+        if (!HasValidMap)
+            return new List<Vector2I>();
+
         var currentRoom = CurrentRoom;
         if (currentRoom == null)
             return new List<Vector2I>();
@@ -177,6 +203,9 @@ public partial class MapSystem : Node
 
     private RoomData GetRoom(Vector2I position)
     {
+        if (!HasValidMap)
+            return null;
+
         if (position.X < 0 || position.Y < 0 || 
             position.X >= _currentFloorMap.Count || 
             position.Y >= _currentFloorMap[0].Count)

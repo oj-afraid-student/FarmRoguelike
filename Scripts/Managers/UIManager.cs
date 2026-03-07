@@ -345,7 +345,159 @@ public partial class UIManager : Control
 
 	private void BindMapUISceneControls()
 	{
-		// 暂时不对 MapUI.tscn 做额外绑定，保留你在场景里的自定义布局和交互。
+		if (_currentMapUI == null)
+		{
+			return;
+		}
+
+		// 绑定场景版暂停按钮，修复点击无响应。
+		var pauseButton = _currentMapUI.GetNodeOrNull<Button>("CenterBox/BgPanel/MarginBox/VBoxContainer/TopBar/PauseButton")
+			?? FindButtonByName(_currentMapUI, "PauseButton");
+		if (pauseButton != null)
+		{
+			pauseButton.Pressed -= OnMapPauseButtonPressed;
+			pauseButton.Pressed += OnMapPauseButtonPressed;
+		}
+
+		// 场景里如果没有方向按钮，运行时补齐并复用现有移动逻辑。
+		EnsureMapSceneMoveButtons();
+		UpdateMapNavigation();
+	}
+
+	private void EnsureMapSceneMoveButtons()
+	{
+		if (_currentMapUI == null)
+		{
+			return;
+		}
+
+		var existing = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/VBoxContainer/DPadCenterer/MoveButtons")
+			?? _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/DPadCenterer/MoveButtons")
+			?? FindControlByName<Control>(_currentMapUI, "MoveButtons");
+		if (existing != null)
+		{
+			return;
+		}
+
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		float navButtonW = Mathf.Clamp(viewportSize.X * 0.055f, 56f, 100f);
+		float navButtonH = Mathf.Clamp(viewportSize.Y * 0.05f, 42f, 72f);
+		int navGap = (int)Mathf.Clamp(viewportSize.X * 0.008f, 8f, 18f);
+
+		AttachFixedMapDPad(_currentMapUI, navButtonW, navButtonH, navGap);
+	}
+
+	private void AttachFixedMapDPad(Control root, float navButtonW, float navButtonH, int navGap)
+	{
+		if (root == null)
+		{
+			return;
+		}
+
+		var dpadLayer = new Control();
+		dpadLayer.Name = "DPadLayer";
+		dpadLayer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		dpadLayer.MouseFilter = Control.MouseFilterEnum.Ignore;
+		root.AddChild(dpadLayer);
+
+		var dpadCenterer = new CenterContainer();
+		dpadCenterer.Name = "DPadCenterer";
+		dpadCenterer.AnchorLeft = 0.5f;
+		dpadCenterer.AnchorTop = 1.0f;
+		dpadCenterer.AnchorRight = 0.5f;
+		dpadCenterer.AnchorBottom = 1.0f;
+		dpadCenterer.OffsetLeft = -140f;
+		dpadCenterer.OffsetTop = -220f;
+		dpadCenterer.OffsetRight = 140f;
+		dpadCenterer.OffsetBottom = -92f;
+		dpadCenterer.MouseFilter = Control.MouseFilterEnum.Ignore;
+		dpadLayer.AddChild(dpadCenterer);
+
+		var moveButtons = new GridContainer();
+		moveButtons.Name = "MoveButtons";
+		moveButtons.Columns = 3;
+		moveButtons.MouseFilter = Control.MouseFilterEnum.Stop;
+		moveButtons.AddThemeConstantOverride("h_separation", navGap);
+		moveButtons.AddThemeConstantOverride("v_separation", navGap);
+		dpadCenterer.AddChild(moveButtons);
+
+		moveButtons.AddChild(new Control());
+		var upButton = new Button { Name = "UpButton", Text = "上", CustomMinimumSize = new Vector2(navButtonW, navButtonH) };
+		upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
+		moveButtons.AddChild(upButton);
+		moveButtons.AddChild(new Control());
+
+		var leftButton = new Button { Name = "LeftButton", Text = "左", CustomMinimumSize = new Vector2(navButtonW, navButtonH) };
+		leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
+		moveButtons.AddChild(leftButton);
+		moveButtons.AddChild(new Control());
+		var rightButton = new Button { Name = "RightButton", Text = "右", CustomMinimumSize = new Vector2(navButtonW, navButtonH) };
+		rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
+		moveButtons.AddChild(rightButton);
+
+		moveButtons.AddChild(new Control());
+		var downButton = new Button { Name = "DownButton", Text = "下", CustomMinimumSize = new Vector2(navButtonW, navButtonH) };
+		downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
+		moveButtons.AddChild(downButton);
+		moveButtons.AddChild(new Control());
+	}
+
+	private Button FindButtonByName(Node root, string buttonName)
+	{
+		if (root == null || string.IsNullOrWhiteSpace(buttonName))
+		{
+			return null;
+		}
+
+		if (root is Button selfButton && selfButton.Name == buttonName)
+		{
+			return selfButton;
+		}
+
+		foreach (Node child in root.GetChildren())
+		{
+			if (child is Button b && b.Name == buttonName)
+			{
+				return b;
+			}
+
+			var found = FindButtonByName(child, buttonName);
+			if (found != null)
+			{
+				return found;
+			}
+		}
+
+		return null;
+	}
+
+	private T FindControlByName<T>(Node root, string nodeName) where T : class
+	{
+		if (root == null || string.IsNullOrWhiteSpace(nodeName))
+		{
+			return null;
+		}
+
+		if (root is T typedRoot && root.Name == nodeName)
+		{
+			return typedRoot;
+		}
+
+		foreach (Node child in root.GetChildren())
+		{
+			if (child is T typedChild && child.Name == nodeName)
+			{
+				return typedChild;
+			}
+
+			var found = FindControlByName<T>(child, nodeName);
+			if (found != null)
+			{
+				return found;
+			}
+		}
+
+		return null;
 	}
 
 	private void _RefreshMapUI()
@@ -1409,52 +1561,7 @@ public partial class UIManager : Control
 		mapGrid.AddThemeConstantOverride("v_separation", navGap);
 		gridCenterer.AddChild(mapGrid);
 
-		innerContainer.AddChild(new MarginContainer { CustomMinimumSize = new Vector2(0, 8) });
-		
-		var moveButtons = new GridContainer();
-		moveButtons.Name = "MoveButtons";
-		moveButtons.Columns = 3;
-		moveButtons.AddThemeConstantOverride("h_separation", navGap);
-		moveButtons.AddThemeConstantOverride("v_separation", navGap);
-
-		var dpadCenterer = new CenterContainer();
-		dpadCenterer.Name = "DPadCenterer";
-		innerContainer.AddChild(dpadCenterer);
-		dpadCenterer.AddChild(moveButtons);
-
-		moveButtons.AddChild(new Control());
-		var upButton = new Button();
-		upButton.Name = "UpButton";
-		upButton.Text = "上";
-		upButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
-		upButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, -1));
-		moveButtons.AddChild(upButton);
-		moveButtons.AddChild(new Control());
-
-		var leftButton = new Button();
-		leftButton.Name = "LeftButton";
-		leftButton.Text = "左";
-		leftButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
-		leftButton.Pressed += () => OnMoveButtonPressed(new Vector2I(-1, 0));
-		moveButtons.AddChild(leftButton);
-		
-		moveButtons.AddChild(new Control());
-		
-		var rightButton = new Button();
-		rightButton.Name = "RightButton";
-		rightButton.Text = "右";
-		rightButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
-		rightButton.Pressed += () => OnMoveButtonPressed(new Vector2I(1, 0));
-		moveButtons.AddChild(rightButton);
-
-		moveButtons.AddChild(new Control());
-		var downButton = new Button();
-		downButton.Name = "DownButton";
-		downButton.Text = "下";
-		downButton.CustomMinimumSize = new Vector2(navButtonW, navButtonH);
-		downButton.Pressed += () => OnMoveButtonPressed(new Vector2I(0, 1));
-		moveButtons.AddChild(downButton);
-		moveButtons.AddChild(new Control());
+		AttachFixedMapDPad(container, navButtonW, navButtonH, navGap);
 		
 		_currentMapUI = container;
 		_uiLayer.AddChild(container);
@@ -2614,19 +2721,34 @@ public partial class UIManager : Control
 		
 		var availableMoves = mapSystem.GetAvailableMoves();
 		
-		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/DPadCenterer/MoveButtons");
+		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/VBoxContainer/DPadCenterer/MoveButtons")
+			?? _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/DPadCenterer/MoveButtons")
+			?? FindControlByName<Control>(_currentMapUI, "MoveButtons");
 		if (moveButtons != null)
 		{
 			var upButton = moveButtons.GetNodeOrNull<Button>("UpButton");
 			var leftButton = moveButtons.GetNodeOrNull<Button>("LeftButton");
 			var rightButton = moveButtons.GetNodeOrNull<Button>("RightButton");
 			var downButton = moveButtons.GetNodeOrNull<Button>("DownButton");
-			
-			if (upButton != null) upButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(0, -1));
-			if (leftButton != null) leftButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(-1, 0));
-			if (rightButton != null) rightButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(1, 0));
-			if (downButton != null) downButton.Visible = availableMoves.Contains(currentRoom.Position + new Vector2I(0, 1));
+
+			SetMoveButtonState(upButton, availableMoves.Contains(currentRoom.Position + new Vector2I(0, -1)));
+			SetMoveButtonState(leftButton, availableMoves.Contains(currentRoom.Position + new Vector2I(-1, 0)));
+			SetMoveButtonState(rightButton, availableMoves.Contains(currentRoom.Position + new Vector2I(1, 0)));
+			SetMoveButtonState(downButton, availableMoves.Contains(currentRoom.Position + new Vector2I(0, 1)));
 		}
+	}
+
+	private void SetMoveButtonState(Button button, bool canMove)
+	{
+		if (button == null)
+		{
+			return;
+		}
+
+		// 保持按钮恒定占位，避免因 Visible 切换导致布局抖动。
+		button.Visible = true;
+		button.Disabled = !canMove;
+		button.Modulate = canMove ? Colors.White : new Color(1f, 1f, 1f, 0.45f);
 	}
 	
 	private void UpdateMapVisuals()
@@ -2640,15 +2762,18 @@ public partial class UIManager : Control
 		if (currentRoom == null)
 			return;
 
-		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/GridCenterer/MapGrid");
+		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/GridCenterer/MapGrid")
+			?? FindControlByName<GridContainer>(_currentMapUI, "MapGrid");
 		if (mapGrid == null)
 			return;
 
-		// 获取地图尺寸 (通过向底层系统发请求，这里简化为根据当前层数计算出的默认大小，或者通过反射/扩展公开接口)
-		// 为了简单起见，既然层数影响尺寸：3 + Mathf.Min(floor / 3, 2);
-		int baseSize = 3;
-		int extra = Mathf.Min(mapSystem.CurrentFloor / 3, 2);
-		int mapSize = baseSize + extra;
+		var mapSizeVec = mapSystem.GetMapSize();
+		if (mapSizeVec == Vector2I.Zero)
+		{
+			return;
+		}
+
+		int mapSize = mapSizeVec.X;
 		var viewportSize = GetViewport().GetVisibleRect().Size;
 		int cellGap = (int)Mathf.Clamp(viewportSize.X * 0.006f, 6f, 12f);
 		float gridSpan = Mathf.Min(viewportSize.X * 0.34f, viewportSize.Y * 0.36f);
@@ -2680,26 +2805,7 @@ public partial class UIManager : Control
 			{
 				var pos = new Vector2I(x, y);
 
-				// 向 MapSystem 查询该点的房间状况
-				var roomDataInfo = mapSystem.GetType().GetMethod("GetRoom", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-				RoomData room = null;
-				if (roomDataInfo != null)
-				{
-					room = (RoomData)roomDataInfo.Invoke(mapSystem, new object[] { pos });
-				}
-				else
-				{
-					// 回退：直接反射字段
-					var mapField = mapSystem.GetType().GetField("_currentFloorMap", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-					if (mapField != null)
-					{
-						var mapData = mapField.GetValue(mapSystem) as List<List<RoomData>>;
-						if (mapData != null && x < mapData.Count && y < mapData[0].Count)
-						{
-							room = mapData[x][y];
-						}
-					}
-				}
+				var room = mapSystem.GetRoomAt(pos);
 
 				var cell = new ColorRect();
 				cell.CustomMinimumSize = new Vector2(cellSize, cellSize);

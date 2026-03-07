@@ -144,8 +144,8 @@ public partial class GameManager : Node
         // 标准新游戏流程：初始化数据、生成地图并进入地图探索
         InitializePlayerData();
         CurrentFloor = 1;
+        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
         ChangeState(GameEnums.GameState.MapExploration);
-        GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);   
         EventBus.Instance.EmitGameStarted();
         GD.Print("新游戏开始");      
     }
@@ -174,6 +174,16 @@ public partial class GameManager : Node
     public void ChangeState(GameEnums.GameState newState)
     {
         if (CurrentState == newState) return;
+
+        // 进入地图探索前确保地图已生成，避免 UI 无法绘制房间和移动按钮不可用。
+        if (newState == GameEnums.GameState.MapExploration)
+        {
+            var mapSystem = GameRoot.Instance?.MapSystem;
+            if (mapSystem != null && !mapSystem.HasValidMap)
+            {
+                mapSystem.GenerateFloor(Math.Max(1, CurrentFloor));
+            }
+        }
         
         CurrentState = newState;
         EventBus.Instance.EmitGameStateChanged(newState);
