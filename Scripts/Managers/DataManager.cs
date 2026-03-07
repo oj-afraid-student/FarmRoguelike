@@ -77,7 +77,225 @@ public partial class DataManager : Node
             Cost = 1,
             Effects = new Dictionary<string, float> { { "draw", 1 }, { "buff_next_attack", 4 } }
         };
+
+        _cards["card_heavy_axe_strike"] = new CardData
+        {
+            Id = "card_heavy_axe_strike",
+            Name = "重斧打击",
+            Description = "造成 12 点伤害。若本回合未使用其他牌，额外造成 8 点伤害。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 2,
+            Effects = new Dictionary<string, float> { { "damage", 12 }, { "heavy_strike_bonus", 8 } }
+        };
+
+        _cards["card_hoe_combo"] = new CardData
+        {
+            Id = "card_hoe_combo",
+            Name = "锄头连击",
+            Description = "造成 4 点伤害，连续使用 2 次，并获得 1 能量。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 1,
+            Effects = new Dictionary<string, float> { { "damage", 4 }, { "multi_hit", 2 }, { "restore_energy", 1 } }
+        };
+
+        _cards["card_last_stand"] = new CardData
+        {
+            Id = "card_last_stand",
+            Name = "破釜沉舟",
+            Description = "失去 2 点生命，获得 2 层力量。",
+            Type = GameEnums.CardType.Skill,
+            Cost = 0,
+            Effects = new Dictionary<string, float> { { "lose_hp", 2 }, { "strength_stacks", 2 } }
+        };
+
+        _cards["card_scythe_harvest"] = new CardData
+        {
+            Id = "card_scythe_harvest",
+            Name = "镰刀收割",
+            Description = "造成 12 点伤害。若目标带有中毒/燃烧/冰冻等 debuff，每层 debuff 使本次伤害+2。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 2,
+            Effects = new Dictionary<string, float> { { "damage", 12 }, { "debuff_bonus_damage", 2 } }
+        };
+
+        _cards["card_flame_spray"] = new CardData
+        {
+            Id = "card_flame_spray",
+            Name = "火焰喷射",
+            Description = "造成 5 点伤害，施加 2 层燃烧。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 2,
+            Effects = new Dictionary<string, float> { { "damage", 5 }, { "burn_stacks", 2 } }
+        };
+
+        _cards["card_frost_spray"] = new CardData
+        {
+            Id = "card_frost_spray",
+            Name = "冰霜喷射",
+            Description = "造成 8 点伤害，施加 1 层冰冻。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 2,
+            Effects = new Dictionary<string, float> { { "damage", 8 }, { "freeze_stacks", 1 } }
+        };
+
+        _cards["card_thunder_strike"] = new CardData
+        {
+            Id = "card_thunder_strike",
+            Name = "雷霆一击",
+            Description = "造成 18 点伤害，施加 1 层眩晕（跳过下回合）。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 3,
+            Effects = new Dictionary<string, float> { { "damage", 18 }, { "stun_stacks", 1 } }
+        };
+
+        _cards["card_thorn_poison_blade"] = new CardData
+        {
+            Id = "card_thorn_poison_blade",
+            Name = "荆棘毒刃",
+            Description = "造成 7 点伤害，施加 1 层中毒，持续 2 回合。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 1,
+            Effects = new Dictionary<string, float> { { "damage", 7 }, { "poison_stacks", 1 } }
+        };
+
+        _cards["card_armor_break_strike"] = new CardData
+        {
+            Id = "card_armor_break_strike",
+            Name = "破甲一击",
+            Description = "造成 10 点伤害，施加 2 层破甲（收到伤害增加20%）。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 2,
+            Effects = new Dictionary<string, float> { { "damage", 10 }, { "vulnerable_stacks", 2 } }
+        };
+
+        _cards["card_precision_axe"] = new CardData
+        {
+            Id = "card_precision_axe",
+            Name = "精准斧击",
+            Description = "造成 8 点伤害，本回合获得精准（无视防御）。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 2,
+            Effects = new Dictionary<string, float> { { "damage", 8 }, { "precision_stacks", 1 } }
+        };
+
+        _cards["card_lifesteal_strike"] = new CardData
+        {
+            Id = "card_lifesteal_strike",
+            Name = "嗜血打击",
+            Description = "造成 10 点伤害，获得 2 层嗜血（伤害 20%回血）。",
+            Type = GameEnums.CardType.Attack,
+            Cost = 2,
+            Effects = new Dictionary<string, float> { { "damage", 10 }, { "lifesteal_stacks", 2 } }
+        };
         
+        // ===== 新增能力卡与技能卡 =====
+        _cards["card_herbal_soup"] = new CardData
+        {
+            Id = "card_herbal_soup", Name = "草药汤", Type = GameEnums.CardType.Skill, Cost = 1, Description = "获得 8 点护盾。",
+            Effects = new Dictionary<string, float> { { "armor", 8f } }
+        };
+        _cards["card_bandage"] = new CardData
+        {
+            Id = "card_bandage", Name = "绷带", Type = GameEnums.CardType.Skill, Cost = 2, Description = "回复 8 点生命，但本回合无法攻击。",
+            Effects = new Dictionary<string, float> { { "heal", 8f }, { "pacifist_stacks", 1f } }
+        };
+        _cards["card_thorn_armor"] = new CardData
+        {
+            Id = "card_thorn_armor", Name = "荆棘护甲", Type = GameEnums.CardType.Skill, Cost = 1, Description = "获得 6 点防御，并获得 1 层反射（受到攻击时反击3点伤害）。",
+            Effects = new Dictionary<string, float> { { "armor", 6f }, { "reflect_stacks", 1f } }
+        };
+        _cards["card_corrosive_liquid"] = new CardData
+        {
+            Id = "card_corrosive_liquid", Name = "腐蚀液", Type = GameEnums.CardType.Skill, Cost = 1, Description = "施加 2 层破甲。",
+            Effects = new Dictionary<string, float> { { "vulnerable_stacks", 2f } }
+        };
+        _cards["card_toxic_spray"] = new CardData
+        {
+            Id = "card_toxic_spray", Name = "剧毒喷雾", Type = GameEnums.CardType.Skill, Cost = 2, Description = "施加 3 层中毒，持续 3 回合。",
+            Effects = new Dictionary<string, float> { { "poison_stacks", 3f } }
+        };
+        _cards["card_tactical_analysis"] = new CardData
+        {
+            Id = "card_tactical_analysis", Name = "战术分析", Type = GameEnums.CardType.Skill, Cost = 1, Description = "抽 2 张牌，丢弃 1 张牌。",
+            Effects = new Dictionary<string, float> { { "draw_cards", 2f }, { "discard_cards", 1f } }
+        };
+        _cards["card_motivation"] = new CardData
+        {
+            Id = "card_motivation", Name = "干劲", Type = GameEnums.CardType.Skill, Cost = 0, Description = "获得 1 点临时能量（本回合可用）。",
+            Effects = new Dictionary<string, float> { { "gain_energy", 1f } }
+        };
+        _cards["card_roaring_shout"] = new CardData
+        {
+            Id = "card_roaring_shout", Name = "振奋呐喊", Type = GameEnums.CardType.Skill, Cost = 2, Description = "本回合获得 振奋。",
+            Effects = new Dictionary<string, float> { { "inspire_stacks", 1f } }
+        };
+        _cards["card_raise_shield"] = new CardData
+        {
+            Id = "card_raise_shield", Name = "举起护盾", Type = GameEnums.CardType.Skill, Cost = 2, Description = "获得 2 层铁壁。",
+            Effects = new Dictionary<string, float> { { "ironwall_stacks", 2f } }
+        };
+        _cards["card_purify"] = new CardData
+        {
+            Id = "card_purify", Name = "净化", Type = GameEnums.CardType.Skill, Cost = 1, Description = "移除自身所有负面效果（中毒、虚弱、破甲等）。",
+            Effects = new Dictionary<string, float> { { "purify", 1f } }
+        };
+        _cards["card_weakening_powder"] = new CardData
+        {
+            Id = "card_weakening_powder", Name = "药粉削弱", Type = GameEnums.CardType.Skill, Cost = 1, Description = "施加 2 层虚弱。",
+            Effects = new Dictionary<string, float> { { "weak_stacks", 2f } }
+        };
+        _cards["card_fearful_scream"] = new CardData
+        {
+            Id = "card_fearful_scream", Name = "恐惧尖叫", Type = GameEnums.CardType.Attack, Cost = 2, Description = "造成 10 点伤害，施加 1 层眩晕。",
+            Effects = new Dictionary<string, float> { { "damage", 10f }, { "stun_stacks", 1f } }
+        };
+        _cards["card_sonic_shock"] = new CardData
+        {
+            Id = "card_sonic_shock", Name = "声波冲击", Type = GameEnums.CardType.Attack, Cost = 1, Description = "造成 5 点伤害，施加 1 层缴械（无法使用攻击牌）。",
+            Effects = new Dictionary<string, float> { { "damage", 5f }, { "disarm_stacks", 1f } }
+        };
+        _cards["card_intimidating_scream"] = new CardData
+        {
+            Id = "card_intimidating_scream", Name = "尖叫恐吓", Type = GameEnums.CardType.Attack, Cost = 1, Description = "造成 7 点伤害，施加 1 层沉默（无法使用技能/能力牌）。",
+            Effects = new Dictionary<string, float> { { "damage", 7f }, { "silence_stacks", 1f } }
+        };
+        
+        // ===== 新增能力与高阶技能卡 =====
+        _cards["card_frenzy"] = new CardData
+        {
+            Id = "card_frenzy", Name = "狂暴", Type = GameEnums.CardType.Ability, Cost = 2, Description = "每回合内，每使用一张攻击牌，获得 1 层力量。",
+            Effects = new Dictionary<string, float> { { "frenzy_stacks", 1f } }
+        };
+        _cards["card_focus"] = new CardData
+        {
+            Id = "card_focus", Name = "专注", Type = GameEnums.CardType.Ability, Cost = 1, Description = "每回合首次使用技能牌时，抽 1 张牌。",
+            Effects = new Dictionary<string, float> { { "focus_stacks", 1f } }
+        };
+        _cards["card_bloodlust"] = new CardData
+        {
+            Id = "card_bloodlust", Name = "嗜血术", Type = GameEnums.CardType.Skill, Cost = 2, Description = "获得 2 层嗜血。",
+            Effects = new Dictionary<string, float> { { "lifesteal_stacks", 2f } }
+        };
+        _cards["card_elemental_affinity"] = new CardData
+        {
+            Id = "card_elemental_affinity", Name = "元素亲和", Type = GameEnums.CardType.Skill, Cost = 2, Description = "2 回合内，每次造成燃烧/冰冻/中毒伤害时，额外造成 3 点伤害。",
+            Effects = new Dictionary<string, float> { { "elemental_affinity_duration", 2f } } // effect param handles duration, innate strength handles buff power later
+        };
+        _cards["card_combo_stance"] = new CardData
+        {
+            Id = "card_combo_stance", Name = "连击架势", Type = GameEnums.CardType.Skill, Cost = 1, Description = "本回合内，每用一张攻击牌，下张攻击牌伤害 +2。",
+            Effects = new Dictionary<string, float> { { "combo_stance_stacks", 1f } }
+        };
+        _cards["card_devil_pact"] = new CardData
+        {
+            Id = "card_devil_pact", Name = "恶魔契约", Type = GameEnums.CardType.Skill, Cost = 0, Description = "抽 3 张牌，本回合获得诅咒（打牌掉血）。",
+            Effects = new Dictionary<string, float> { { "draw_cards", 3f }, { "curse_stacks", 1f } }
+        };
+        _cards["card_hourglass"] = new CardData
+        {
+            Id = "card_hourglass", Name = "时光沙漏", Type = GameEnums.CardType.Skill, Cost = 2, Description = "本回合结束后，额外进行一次玩家回合（不重置临时BUFF）。",
+            Effects = new Dictionary<string, float> { { "extra_turn_stacks", 1f } }
+        };
         
         // 测试作物数据 - 基础作物（无效果）
         _crops["crop_wheat"] = new CropData
@@ -463,6 +681,110 @@ public partial class DataManager : Node
             IsStackable = false,
             MaxStacks = 1,
             NumericParams = new Dictionary<string, float> { { "lifesteal_ratio", 0.2f } }
+        };
+
+        _statusEffects["freeze"] = new StatusEffectData
+        {
+            Id = "freeze",
+            Name = "冰冻",
+            Description = "带有冰冻效果",
+            StackRule = "可叠加",
+            Duration = "1-3回合",
+            Notes = "控制/附加状态",
+            IsStackable = true,
+            MaxStacks = 99,
+            NumericParams = new Dictionary<string, float>()
+        };
+
+        _statusEffects["stun"] = new StatusEffectData
+        {
+            Id = "stun",
+            Name = "眩晕",
+            Description = "跳过下回合",
+            StackRule = "可叠加",
+            Duration = "1回合",
+            Notes = "强力控制效果",
+            IsStackable = true,
+            MaxStacks = 99,
+            NumericParams = new Dictionary<string, float>()
+        };
+
+        _statusEffects["precision"] = new StatusEffectData
+        {
+            Id = "precision",
+            Name = "精准",
+            Description = "无视敌人防御的伤害增益",
+            StackRule = "不可叠加",
+            Duration = "本回合",
+            Notes = "临时性状态",
+            IsStackable = false,
+            MaxStacks = 1,
+            NumericParams = new Dictionary<string, float>()
+        };
+
+        _statusEffects["reflect"] = new StatusEffectData
+        {
+            Id = "reflect",
+            Name = "反射",
+            Description = "受到攻击时反弹3点伤害给攻击者",
+            StackRule = "可叠加",
+            Duration = "1回合",
+            Notes = "防守反击",
+            IsStackable = true,
+            MaxStacks = 99,
+            NumericParams = new Dictionary<string, float>()
+        };
+
+        _statusEffects["inspire"] = new StatusEffectData
+        {
+            Id = "inspire",
+            Name = "振奋",
+            Description = "每次使用卡牌恢复1点生命",
+            StackRule = "可叠加",
+            Duration = "本回合",
+            Notes = "临时续航增益",
+            IsStackable = true,
+            MaxStacks = 99,
+            NumericParams = new Dictionary<string, float>()
+        };
+
+        _statusEffects["disarm"] = new StatusEffectData
+        {
+            Id = "disarm",
+            Name = "缴械",
+            Description = "无法使用攻击牌",
+            StackRule = "覆盖刷新",
+            Duration = "1回合",
+            Notes = "禁止物理攻击",
+            IsStackable = false,
+            MaxStacks = 1,
+            NumericParams = new Dictionary<string, float>()
+        };
+
+        _statusEffects["silence"] = new StatusEffectData
+        {
+            Id = "silence",
+            Name = "沉默",
+            Description = "无法使用技能牌和能力牌",
+            StackRule = "覆盖刷新",
+            Duration = "1回合",
+            Notes = "禁止技能魔法",
+            IsStackable = false,
+            MaxStacks = 1,
+            NumericParams = new Dictionary<string, float>()
+        };
+        
+        _statusEffects["pacifist"] = new StatusEffectData
+        {
+            Id = "pacifist",
+            Name = "和平",
+            Description = "本回合无法攻击",
+            StackRule = "覆盖刷新",
+            Duration = "1回合",
+            Notes = "临时无法攻击",
+            IsStackable = false,
+            MaxStacks = 1,
+            NumericParams = new Dictionary<string, float>()
         };
     }
     

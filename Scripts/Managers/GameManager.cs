@@ -74,12 +74,49 @@ public partial class GameManager : Node
         // 初始卡组
         PlayerData.Deck = new List<string>
         {
-            "card_scythe_slash",
-            "card_hoe_smash",
-            "card_raise_tools",
-            "card_urgent_bandage",
-            "card_spray_pesticide",
-            "card_observe_weakness"
+            // 原有基础牌
+            // "card_scythe_slash",
+            // "card_hoe_smash",
+            // "card_raise_tools",
+            // "card_urgent_bandage",
+            // "card_spray_pesticide",
+            // "card_observe_weakness",
+            
+            // // 新增测试牌
+            // "card_heavy_axe_strike",
+            // "card_hoe_combo",
+            // "card_last_stand",
+            // "card_scythe_harvest",
+            // "card_flame_spray",
+            // "card_frost_spray",
+            // "card_thunder_strike",
+            // "card_thorn_poison_blade",
+            // "card_armor_break_strike",
+            // "card_precision_axe",
+            // "card_lifesteal_strike",
+
+            // "card_herbal_soup",
+            // "card_bandage",
+            // "card_thorn_armor",
+            // "card_corrosive_liquid",
+            // "card_toxic_spray",
+            // "card_tactical_analysis",
+            // "card_motivation",
+            // "card_roaring_shout",
+            // "card_raise_shield",
+            // "card_purify",
+            // "card_weakening_powder",
+            // "card_fearful_scream",
+            // "card_sonic_shock",
+            // "card_intimidating_scream",
+            
+            "card_frenzy",
+            "card_focus",
+            "card_bloodlust",
+            "card_elemental_affinity",
+            "card_combo_stance",
+            "card_devil_pact",
+            "card_hourglass"
         };
     }
     

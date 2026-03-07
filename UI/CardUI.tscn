@@ -1,6 +1,7 @@
-[gd_scene format=3 uid="uid://5abbdrdlckbq"]
+[gd_scene format=3 uid="uid://c7q8d4hp6kt26"]
 
-[ext_resource type="Texture2D" uid="uid://cgqdmo3twm2bp" path="res://Assets/UI/Combat/锄头猛击.png" id="1_qbe4h"]
+[ext_resource type="Texture2D" uid="uid://cllpvruhm8ooq" path="res://Assets/UI/Combat/Card/锄头猛击.png" id="1_qbe4h"]
+
 
 [node name="CardUI" type="Control" unique_id=103098513]
 custom_minimum_size = Vector2(200, 285)

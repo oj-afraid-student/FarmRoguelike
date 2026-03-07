@@ -42,6 +42,7 @@ public partial class UIManager : Control
 	[Export] private Label _actionPointsLabel;
 	[Export] private HBoxContainer _handContainer;
 	[Export] private ProgressBar _healthBar;
+	private ProgressBar _combatPlayerHealthBar;
 	private TextureButton _drawPileButton;
 	private TextureButton _discardPileButton;
 	private Label _drawPileLabel;
@@ -138,10 +139,10 @@ public partial class UIManager : Control
 			_farmUIScene = GD.Load<PackedScene>("res://UI/FarmUI.tscn");
 		}
 		
-		// if (ResourceLoader.Exists("res://UI/MapUI.tscn"))
-		// {
-		// 	_mapUIScene = GD.Load<PackedScene>("res://UI/MapUI.tscn");
-		// }
+		if (ResourceLoader.Exists("res://UI/MapUI.tscn"))
+		{
+			_mapUIScene = GD.Load<PackedScene>("res://UI/MapUI.tscn");
+		}
 		
 		// if (ResourceLoader.Exists("res://UI/RewardUI.tscn"))
 		// {
@@ -324,6 +325,9 @@ public partial class UIManager : Control
 		{
 			_currentMapUI = _mapUIScene.Instantiate<Control>();
 			_uiLayer.AddChild(_currentMapUI);
+
+			// 场景版地图 UI：绑定暂停按钮、方向键和左侧行动面板按钮
+			BindMapUISceneControls();
 		}
 		else
 		{
@@ -338,7 +342,12 @@ public partial class UIManager : Control
 		CallDeferred("_RefreshMapUI");
 		ShowNotification("探索地图中...");
 	}
-	
+
+	private void BindMapUISceneControls()
+	{
+		// 暂时不对 MapUI.tscn 做额外绑定，保留你在场景里的自定义布局和交互。
+	}
+
 	private void _RefreshMapUI()
 	{
 		UpdateMapNavigation();
@@ -1170,7 +1179,7 @@ public partial class UIManager : Control
 		{
 			healthBar.CustomMinimumSize = new Vector2(240, 24);
 			playerStats.AddChild(healthBar);
-			_healthBar = healthBar;
+			_combatPlayerHealthBar = healthBar;
 		}
 		else
 		{
@@ -1876,10 +1885,16 @@ public partial class UIManager : Control
 		}
 		
 		// 更新生命值进度条
-		if (_healthBar != null)
+		if (IsInstanceValid(_healthBar))
 		{
 			_healthBar.MaxValue = playerData.MaxHealth;
 			_healthBar.Value = playerData.CurrentHealth;
+		}
+		
+		if (IsInstanceValid(_combatPlayerHealthBar))
+		{
+			_combatPlayerHealthBar.MaxValue = playerData.MaxHealth;
+			_combatPlayerHealthBar.Value = playerData.CurrentHealth;
 		}
 		
 		// 更新金币显示
@@ -1915,7 +1930,58 @@ public partial class UIManager : Control
 		}
 		if (IsInstanceValid(_combatPlayerEnergyLabel) && combatSys != null)
 		{
-			_combatPlayerEnergyLabel.Text = $"能量: {combatSys.GetPlayerEnergy()}";
+			string statusText = "";
+			
+			// 新增的特殊机制Buff优先显示
+			int curse = combatSys.GetPlayerStatusStacksPublic("curse");
+			if (curse > 0) statusText += $" 诅咒:{curse}层";
+			int frenzy = combatSys.GetPlayerStatusStacksPublic("frenzy");
+			if (frenzy > 0) statusText += $" 狂暴:{frenzy}层";
+			int focus = combatSys.GetPlayerStatusStacksPublic("focus");
+			if (focus > 0) statusText += $" 专注:{focus}层";
+			int elementalAffinity = combatSys.GetPlayerStatusStacksPublic("elemental_affinity");
+			if (elementalAffinity > 0) statusText += $" 元素亲和:{elementalAffinity}层";
+			int comboStance = combatSys.GetPlayerStatusStacksPublic("combo_stance");
+			if (comboStance > 0) statusText += $" 连击架势:{comboStance}层";
+			int extraTurn = combatSys.GetPlayerStatusStacksPublic("extra_turn");
+			if (extraTurn > 0) statusText += $" 时光沙漏发动!";
+
+			int poison = combatSys.GetPlayerStatusStacksPublic("poison");
+			if (poison > 0) statusText += $" 中毒:{poison}层";
+			int freeze = combatSys.GetPlayerStatusStacksPublic("freeze");
+			if (freeze > 0) statusText += $" 冰冻:{freeze}层";
+			int burn = combatSys.GetPlayerStatusStacksPublic("burn");
+			if (burn > 0) statusText += $" 燃烧:{burn}层";
+			int stun = combatSys.GetPlayerStatusStacksPublic("stun");
+			if (stun > 0) statusText += $" 眩晕:{stun}层";
+			int vulnerable = combatSys.GetPlayerStatusStacksPublic("vulnerable");
+			if (vulnerable > 0) statusText += $" 破甲:{vulnerable}层";
+			int strength = combatSys.GetPlayerStatusStacksPublic("strength");
+			if (strength > 0) statusText += $" 力量:{strength}层";
+			int precision = combatSys.GetPlayerStatusStacksPublic("precision");
+			if (precision > 0) statusText += $" 精准:{precision}层";
+			int lifesteal = combatSys.GetPlayerStatusStacksPublic("lifesteal");
+			if (lifesteal > 0) statusText += $" 嗜血:{lifesteal}层";
+			int vigor = combatSys.GetPlayerStatusStacksPublic("vigor");
+			if (vigor > 0) statusText += $" 活力:{vigor}层";
+			int weak = combatSys.GetPlayerStatusStacksPublic("weak");
+			if (weak > 0) statusText += $" 虚弱:{weak}层";
+			int ironwall = combatSys.GetPlayerStatusStacksPublic("ironwall");
+			if (ironwall > 0) statusText += $" 铁壁:{ironwall}层";
+			int reflect = combatSys.GetPlayerStatusStacksPublic("reflect");
+			if (reflect > 0) statusText += $" 反射:{reflect}层";
+			int inspire = combatSys.GetPlayerStatusStacksPublic("inspire");
+			if (inspire > 0) statusText += $" 振奋:{inspire}层";
+			int disarm = combatSys.GetPlayerStatusStacksPublic("disarm");
+			if (disarm > 0) statusText += $" 缴械:{disarm}层";
+			int silence = combatSys.GetPlayerStatusStacksPublic("silence");
+			if (silence > 0) statusText += $" 沉默:{silence}层";
+			int pacifist = combatSys.GetPlayerStatusStacksPublic("pacifist");
+			if (pacifist > 0) statusText += $" 和平:{pacifist}层";
+			
+			if (statusText != "") statusText = "\n状态:" + statusText;
+			
+			_combatPlayerEnergyLabel.Text = $"能量: {combatSys.GetPlayerEnergy()}{statusText}";
 		}
 		else
 		{
@@ -2061,6 +2127,7 @@ public partial class UIManager : Control
 		var popupContainer = new CenterContainer();
 		popupContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		popupContainer.MouseFilter = Control.MouseFilterEnum.Ignore;
+		popupContainer.ZIndex = 100; // 确保置于顶层
 		
 		var panel = new PanelContainer();
 		panel.MouseFilter = Control.MouseFilterEnum.Ignore;
@@ -2167,7 +2234,27 @@ public partial class UIManager : Control
 			var enemyData = _dataManager?.GetEnemy(enemyId);
 			if (enemyData != null)
 			{
-				enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}";
+				string statusText = "";
+				int poison = combatSys.GetEnemyStatusStacksPublic("poison");
+				if (poison > 0) statusText += $" 中毒:{poison}层";
+				int freeze = combatSys.GetEnemyStatusStacksPublic("freeze");
+				if (freeze > 0) statusText += $" 冰冻:{freeze}层";
+				int burn = combatSys.GetEnemyStatusStacksPublic("burn");
+				if (burn > 0) statusText += $" 燃烧:{burn}层";
+				int stun = combatSys.GetEnemyStatusStacksPublic("stun");
+				if (stun > 0) statusText += $" 眩晕:{stun}层";
+				int vulnerable = combatSys.GetEnemyStatusStacksPublic("vulnerable");
+				if (vulnerable > 0) statusText += $" 破甲:{vulnerable}层";
+				int weak = combatSys.GetEnemyStatusStacksPublic("weak");
+				if (weak > 0) statusText += $" 虚弱:{weak}层";
+				int disarm = combatSys.GetEnemyStatusStacksPublic("disarm");
+				if (disarm > 0) statusText += $" 缴械:{disarm}层";
+				int silence = combatSys.GetEnemyStatusStacksPublic("silence");
+				if (silence > 0) statusText += $" 沉默:{silence}层";
+				
+				if (statusText != "") statusText = "\n状态:" + statusText;
+				
+				enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}{statusText}";
 			}
 		}
 	}
@@ -2178,6 +2265,7 @@ public partial class UIManager : Control
 		UpdateHandCards();
 		// 卡牌可能会改变玩家的临时护甲/护盾，更新相关显示
 		UpdatePlayerStats();
+		UpdateCombatEnemyInfo();
 	}
 
 	private void OnPlayerDamaged(int damage)
@@ -2210,13 +2298,8 @@ public partial class UIManager : Control
 			{
 				ShowDamageEffect(damage, enemyInfo.GlobalPosition, true);
 				
-				// 获取战斗系统中的实时血量
-				var enemyData = _dataManager?.GetEnemy(enemyId);
-				var combatSys = GameRoot.Instance?.CombatSystem;
-				if (enemyData != null && combatSys != null)
-				{
-					enemyInfo.Text = $"敌人: {enemyData.Name} (生命: {combatSys.CurrentEnemyHealth}/{combatSys.CurrentEnemyMaxHealth}) \n攻击: {enemyData.Attack} 防御: {enemyData.Defense}";
-				}
+				// 直接通过通用方法更新战斗信息UI，包含血量和附加状态字样显示
+				UpdateCombatEnemyInfo(enemyId);
 			}
 		}
 	}
@@ -2496,7 +2579,7 @@ public partial class UIManager : Control
 		
 		var availableMoves = mapSystem.GetAvailableMoves();
 		
-		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/VBoxContainer/MoveButtons");
+		var moveButtons = _currentMapUI.GetNodeOrNull<Control>("CenterBox/BgPanel/MarginBox/DPadCenterer/MoveButtons");
 		if (moveButtons != null)
 		{
 			var upButton = moveButtons.GetNodeOrNull<Button>("UpButton");
@@ -2515,23 +2598,17 @@ public partial class UIManager : Control
 	{
 		if (_currentMapUI == null) return;
 		var mapSystem = GameRoot.Instance?.MapSystem;
-		if (mapSystem == null) 
-		{
+		if (mapSystem == null)
 			return;
-		}
-		
+
 		var currentRoom = mapSystem.CurrentRoom;
-		if (currentRoom == null) 
-		{
+		if (currentRoom == null)
 			return;
-		}
-		
+
 		var mapGrid = _currentMapUI.GetNodeOrNull<GridContainer>("CenterBox/BgPanel/MarginBox/VBoxContainer/GridCenterer/MapGrid");
-		if (mapGrid == null) 
-		{
+		if (mapGrid == null)
 			return;
-		}
-		
+
 		// 获取地图尺寸 (通过向底层系统发请求，这里简化为根据当前层数计算出的默认大小，或者通过反射/扩展公开接口)
 		// 为了简单起见，既然层数影响尺寸：3 + Mathf.Min(floor / 3, 2);
 		int baseSize = 3;
@@ -2541,25 +2618,33 @@ public partial class UIManager : Control
 		int cellGap = (int)Mathf.Clamp(viewportSize.X * 0.006f, 6f, 12f);
 		float gridSpan = Mathf.Min(viewportSize.X * 0.34f, viewportSize.Y * 0.36f);
 		float cellSize = Mathf.Clamp((gridSpan - (mapSize - 1) * cellGap) / mapSize, 48f, 96f);
-		
+
 		mapGrid.Columns = mapSize;
 		mapGrid.AddThemeConstantOverride("h_separation", cellGap);
 		mapGrid.AddThemeConstantOverride("v_separation", cellGap);
-		
+
+		// 预加载格子图标（允许为空，作为纯色+文字兜底）
+		var texCurrent = TryLoadTexture("res://Assets/UI/Map/icon_current.png");
+		var texVisited = TryLoadTexture("res://Assets/UI/Map/icon_visited.png");
+		var texBoss = TryLoadTexture("res://Assets/UI/Map/icon_boss.png");
+		var texReward = TryLoadTexture("res://Assets/UI/Map/icon_reward.png");
+		var texTrap = TryLoadTexture("res://Assets/UI/Map/icon_trap.png");
+		var texReachable = TryLoadTexture("res://Assets/UI/Map/icon_reachable.png");
+
 		// 必须立即释放节点，否则 GridContainer 会因为 QueueFree 的延迟导致布局完全错乱并且把新节点挤出屏幕外
 		foreach (Node child in mapGrid.GetChildren())
 		{
 			mapGrid.RemoveChild(child);
 			child.Free();
 		}
-		
+
 		// 重新生成格子 (GridContainer 的子节点按行依次排列，所以外侧循环 Y，内侧循环 X)
 		for (int y = 0; y < mapSize; y++)
 		{
 			for (int x = 0; x < mapSize; x++)
 			{
 				var pos = new Vector2I(x, y);
-				
+
 				// 向 MapSystem 查询该点的房间状况
 				var roomDataInfo = mapSystem.GetType().GetMethod("GetRoom", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 				RoomData room = null;
@@ -2580,17 +2665,25 @@ public partial class UIManager : Control
 						}
 					}
 				}
-				
+
 				var cell = new ColorRect();
 				cell.CustomMinimumSize = new Vector2(cellSize, cellSize);
 
+				// 图标节点：覆盖整个格子，用来显示当前位置/已访问/特殊房间的图标
+				var icon = new TextureRect();
+				icon.Name = "Icon";
+				icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+				icon.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+				cell.AddChild(icon);
+
+				// 文字节点：作为兜底/调试用标记
 				var label = new Label();
 				label.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 				label.HorizontalAlignment = HorizontalAlignment.Center;
 				label.VerticalAlignment = VerticalAlignment.Center;
 				label.AddThemeFontSizeOverride("font_size", 15);
 				cell.AddChild(label);
-				
+
 				if (room == null)
 				{
 					// 越界或者无效
@@ -2598,39 +2691,45 @@ public partial class UIManager : Control
 				}
 				else
 				{
+					// 默认底色
+					cell.Color = new Color(0.3f, 0.3f, 0.3f, 1f); // 暗黑色
+
 					// 玩家当前所在
 					if (pos == currentRoom.Position)
 					{
 						cell.Color = new Color(0.8f, 0.8f, 0.2f, 1f); // 亮黄色
 						label.Text = "You";
-						label.AddThemeColorOverride("font_color", new Color(0,0,0,1));
+						label.AddThemeColorOverride("font_color", new Color(0, 0, 0, 1));
+						if (texCurrent != null)
+							icon.Texture = texCurrent;
 					}
 					// 已访问
 					else if (room.IsVisited)
 					{
 						cell.Color = new Color(0.2f, 0.6f, 0.2f, 1f); // 绿色
 						label.Text = "√";
+						if (texVisited != null)
+							icon.Texture = texVisited;
 					}
 					// 当前节点的相邻可访问节点
 					else if (currentRoom.Connections.Contains(pos))
 					{
 						cell.Color = new Color(0.6f, 0.6f, 0.6f, 1f); // 亮灰色
 						label.Text = "?";
+						if (texReachable != null)
+							icon.Texture = texReachable;
 					}
-					// 未相邻未访问
-					else
-					{
-						cell.Color = new Color(0.3f, 0.3f, 0.3f, 1f); // 暗黑色
-						label.Text = "";
-					}
-					
-					// 如果是特殊房间特殊标记
+
+					// 如果是特殊房间特殊标记（在“当前位置/已访问/邻接可走”逻辑基础上再叠加）
 					if (room.Type == GameEnums.RoomType.Boss)
 					{
 						label.Text = "B";
+						if (texBoss != null)
+							icon.Texture = texBoss;
+
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
-						   cell.Color = new Color(0.5f, 0.1f, 0.1f, 1f); // 暗红
+							cell.Color = new Color(0.5f, 0.1f, 0.1f, 1f); // 暗红
 						}
 					}
 					else if (room.Type == GameEnums.RoomType.Trap)
@@ -2638,6 +2737,8 @@ public partial class UIManager : Control
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
 							label.Text = "T";
+							if (texTrap != null)
+								icon.Texture = texTrap;
 							cell.Color = new Color(0.5f, 0.3f, 0.1f, 1f); // 橘黑/暗橙
 						}
 					}
@@ -2646,11 +2747,13 @@ public partial class UIManager : Control
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
 							label.Text = "R";
+							if (texReward != null)
+								icon.Texture = texReward;
 							cell.Color = new Color(0.1f, 0.5f, 0.5f, 1f); // 蓝绿
 						}
 					}
 				}
-				
+
 				mapGrid.AddChild(cell);
 			}
 		}
@@ -2717,6 +2820,42 @@ public partial class UIManager : Control
 			_gameManager.TogglePause(); // 先取消暂停状态，确保状态切换逻辑正常执行
 		}
 		OnMainMenuButtonPressed();
+	}
+
+	private void OnMapPauseButtonPressed()
+	{
+		if (_gameManager != null)
+		{
+			_gameManager.TogglePause();
+		}
+	}
+
+	private void OnMapInspectButtonPressed()
+	{
+		var mapSystem = GameRoot.Instance?.MapSystem;
+		var room = mapSystem?.CurrentRoom;
+		if (room == null)
+		{
+			ShowNotification("当前没有房间信息");
+			return;
+		}
+
+		var pos = room.Position;
+		var cleared = room.IsCleared ? "是" : "否";
+		ShowNotification($"房间[{pos.X},{pos.Y}] 类型: {room.Type} 已清理: {cleared}");
+	}
+
+	private void OnMapBackToFarmButtonPressed()
+	{
+		if (_gameManager != null)
+		{
+			_gameManager.ChangeState(GameEnums.GameState.Farming);
+		}
+	}
+
+	private void OnMapBackToDeckButtonPressed()
+	{
+		ShowNotification("返回牌组界面功能暂未实现");
 	}
 
 	private void OnCardClicked(CardUI cardUI)
@@ -2989,6 +3128,40 @@ public partial class CardUI : Button
 			fallback.Color = new Color(0.08f, 0.08f, 0.12f, 0.95f);
 			fallback.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 			AddChild(fallback);
+
+			var marginContainer = new MarginContainer();
+			marginContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			marginContainer.AddThemeConstantOverride("margin_left", 10);
+			marginContainer.AddThemeConstantOverride("margin_top", 10);
+			marginContainer.AddThemeConstantOverride("margin_right", 10);
+			marginContainer.AddThemeConstantOverride("margin_bottom", 10);
+			AddChild(marginContainer);
+
+			var container = new VBoxContainer();
+			marginContainer.AddChild(container);
+
+			var nameLabel = new Label();
+			nameLabel.Text = CardData.Name;
+			nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			nameLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			nameLabel.AddThemeFontSizeOverride("font_size", 20);
+			nameLabel.AddThemeColorOverride("font_color", Colors.Gold);
+			container.AddChild(nameLabel);
+
+			var costLabel = new Label();
+			costLabel.Text = $"能量: {CardData.Cost}";
+			costLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			costLabel.AddThemeColorOverride("font_color", Colors.Cyan);
+			container.AddChild(costLabel);
+
+			var descLabel = new Label();
+			descLabel.Text = CardData.Description;
+			descLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			descLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			descLabel.AddThemeFontSizeOverride("font_size", 14);
+			descLabel.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+			descLabel.VerticalAlignment = VerticalAlignment.Center;
+			container.AddChild(descLabel);
 		}
 		
 		// 点击事件

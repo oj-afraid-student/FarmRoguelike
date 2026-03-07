@@ -26,7 +26,6 @@ public partial class CombatSystem : Node2D
 	private int _enemyAiStateIndex = 0;
 	
 	private int _enemyPoisonStacks = 0;
-	private int _nextAttackDamageBonus = 0;
 
 	private Dictionary<string, CombatStatusRuntime> _playerStatuses = new();
 	private Dictionary<string, CombatStatusRuntime> _enemyStatuses = new();
@@ -35,6 +34,10 @@ public partial class CombatSystem : Node2D
 	private bool _isPlayerTurn = true;
 	private int _playerEnergy = 3;
 	private int _playerDefenseThisTurn = 0;
+	private int _cardsPlayedThisTurn = 0;
+	private int _skillsPlayedThisTurn = 0;
+	private int _nextAttackDamageBonus = 0;
+	private bool _extraTurnRequested = false;
 	
 	private List<string> _playerHand = new List<string>();
 	private List<string> _playerDrawPile = new List<string>();
@@ -85,7 +88,7 @@ public partial class CombatSystem : Node2D
 		
 		_currentEnemyId = enemyId;
 		_isPlayerTurn = true;
-		_playerEnergy = 3;
+		_playerEnergy = _playerData?.Energy ?? 3; // Use player's base energy
 		_playerDefenseThisTurn = 0;
 		_enemyAiStateIndex = 0;
 		_enemyPoisonStacks = 0;
@@ -93,6 +96,9 @@ public partial class CombatSystem : Node2D
 		_playerStatuses.Clear();
 		_enemyStatuses.Clear();
 		_playerExciteDrawCountThisTurn = 0;
+		_cardsPlayedThisTurn = 0;
+		_skillsPlayedThisTurn = 0;
+		_extraTurnRequested = false;
 		
 		var dataManager = GetNodeOrNull<DataManager>("/root/DataManager");
 		if (dataManager != null)
@@ -239,11 +245,58 @@ public partial class CombatSystem : Node2D
 		_playerHand.Remove(cardId);
 		_playerDiscardPile.Add(cardId);
 		_playerEnergy -= cardData.Cost;
+		_cardsPlayedThisTurn++;
+		
+		if (cardData.Type == GameEnums.CardType.Skill)
+		{
+			_skillsPlayedThisTurn++;
+			// 专注：每回合首次使用技能牌时，抽 1 张牌
+			if (_skillsPlayedThisTurn == 1 && HasStatus(_playerStatuses, "focus"))
+			{
+				int focusMuls = GetStatusStacks(_playerStatuses, "focus");
+				for (int i = 0; i < focusMuls; i++) DrawCard();
+				GD.Print($"专注效果触发，抽取了 {focusMuls} 张牌");
+			}
+		}
+
+		if (cardData.Type == GameEnums.CardType.Attack)
+		{
+			// 狂暴：每使用一张攻击牌，获得1层力量
+			if (HasStatus(_playerStatuses, "frenzy"))
+			{
+				int frenzyStacks = GetStatusStacks(_playerStatuses, "frenzy");
+				ApplyStatus(_playerStatuses, "strength", frenzyStacks, 1);
+				GD.Print($"狂暴效果触发，获得了 {frenzyStacks} 层力量");
+			}
+			// 连击架势：每用一张攻击牌，下张攻击牌伤害 +2
+			if (HasStatus(_playerStatuses, "combo_stance"))
+			{
+				int comboStacks = 2 * GetStatusStacks(_playerStatuses, "combo_stance");
+				_nextAttackDamageBonus += comboStacks;
+				GD.Print($"连击架势触发，下一次攻击附加 {comboStacks} 点伤害");
+			}
+		}
+
+		// 处理诅咒：每打出一张牌受到伤害
+		if (HasStatus(_playerStatuses, "curse"))
+		{
+			int curseDmg = 2 * GetStatusStacks(_playerStatuses, "curse");
+			GD.Print($"诅咒发作！玩家受到 {curseDmg} 点伤害");
+			ApplyDamageToPlayer(curseDmg);
+		}
 		
 		// 处理卡牌效果
 		ProcessCardEffect(cardId, targetId);
 
 		ApplyStatusAfterPlayCard();
+		
+		// 振奋：每次出牌回血
+		if (HasStatus(_playerStatuses, "inspire"))
+		{
+			int healAmount = 1 * GetStatusStacks(_playerStatuses, "inspire");
+			_gameManager?.HealPlayer(healAmount);
+			GD.Print($"振奋效果触发，回复了 {healAmount} 点生命");
+		}
 		
 		_eventBus.EmitCardPlayed(cardId, targetId);
 		
@@ -283,13 +336,43 @@ public partial class CombatSystem : Node2D
 			switch (effect.Key.ToLower())
 			{
 				case "damage":
-					int damage = (int)effect.Value + (_playerData?.Attack ?? 0) + _nextAttackDamageBonus;
+					int damage = (int)effect.Value + _nextAttackDamageBonus;
 					_nextAttackDamageBonus = 0; // 消耗Buff
+
+					if (cardData.Effects.TryGetValue("debuff_bonus_damage", out float bonusPerStack))
+					{
+						int debuffStacks = GetStatusStacks(_enemyStatuses, "poison") +
+										   GetStatusStacks(_enemyStatuses, "burn") +
+										   GetStatusStacks(_enemyStatuses, "freeze") + 
+										   GetStatusStacks(_enemyStatuses, "weak") +
+										   GetStatusStacks(_enemyStatuses, "vulnerable") +
+										   GetStatusStacks(_enemyStatuses, "stun");
+						damage += debuffStacks * (int)bonusPerStack;
+					}
+
+					if (cardData.Effects.TryGetValue("heavy_strike_bonus", out float heavyBonus))
+					{
+						if (_cardsPlayedThisTurn == 1) // Only this card played
+						{
+							damage += (int)heavyBonus;
+						}
+					}
+
 					ApplyDamageToEnemy(damage);
+
+					if (cardData.Effects.TryGetValue("multi_hit", out float hits))
+					{
+						for (int i = 1; i < (int)hits; i++)
+						{
+							int multiDamage = (int)effect.Value;
+							ApplyDamageToEnemy(multiDamage);
+						}
+					}
 					break;
 					
 				case "defense":
 				case "block":
+				case "armor":
 					int defense = (int)effect.Value + (_playerData?.Defense ?? 0);
 					_playerDefenseThisTurn += defense;
 					GD.Print($"获得 {defense} 点护甲，当前护甲: {_playerDefenseThisTurn}");
@@ -331,6 +414,49 @@ public partial class CombatSystem : Node2D
 			case "lifesteal":
 				ApplyStatus(_playerStatuses, "lifesteal", 1, 2);
 				break;
+				
+			case "lose_hp":
+				if (_gameManager != null)
+				{
+					_gameManager.ApplyDamageToPlayer((int)effect.Value);
+					GD.Print($"失去 {(int)effect.Value} 点生命值");
+				}
+				break;
+				
+			case "burn_stacks":
+				ApplyStatus(_enemyStatuses, "burn", (int)effect.Value, 3);
+				GD.Print($"施加了 {(int)effect.Value} 层燃烧");
+				break;
+				
+			case "freeze_stacks":
+				ApplyStatus(_enemyStatuses, "freeze", (int)effect.Value, 2);
+				GD.Print($"施加了 {(int)effect.Value} 层冰冻");
+				break;
+				
+			case "stun_stacks":
+				ApplyStatus(_enemyStatuses, "stun", (int)effect.Value, 1);
+				GD.Print($"施加了 {(int)effect.Value} 层眩晕");
+				break;
+				
+			case "vulnerable_stacks":
+				ApplyStatus(_enemyStatuses, "vulnerable", (int)effect.Value, 2);
+				GD.Print($"施加了 {(int)effect.Value} 层易伤(破甲)");
+				break;
+				
+			case "precision_stacks":
+				ApplyStatus(_playerStatuses, "precision", (int)effect.Value, 1);
+				GD.Print($"获得了 {(int)effect.Value} 层精准");
+				break;
+				
+			case "strength_stacks":
+				ApplyStatus(_playerStatuses, "strength", (int)effect.Value, 3);
+				GD.Print($"获得了 {(int)effect.Value} 层力量");
+				break;
+				
+			case "lifesteal_stacks":
+				ApplyStatus(_playerStatuses, "lifesteal", 1, (int)effect.Value);
+				GD.Print($"获得了嗜血效果，持续 {(int)effect.Value} 回合");
+				break;
 					
 				case "draw":
 					for (int i = 0; i < (int)effect.Value; i++)
@@ -342,6 +468,107 @@ public partial class CombatSystem : Node2D
 				case "buff_next_attack":
 					_nextAttackDamageBonus += (int)effect.Value;
 					GD.Print($"获得下一击伤害Buff: +{(int)effect.Value}");
+					break;
+					
+				case "pacifist_stacks":
+					ApplyStatus(_playerStatuses, "pacifist", (int)effect.Value, 1);
+					GD.Print($"获得了和平(禁止攻击) {(int)effect.Value} 层");
+					break;
+					
+				case "reflect_stacks":
+					ApplyStatus(_playerStatuses, "reflect", (int)effect.Value, 1);
+					GD.Print($"获得了反伤特效 {(int)effect.Value} 层");
+					break;
+					
+				case "inspire_stacks":
+					ApplyStatus(_playerStatuses, "inspire", (int)effect.Value, 1);
+					GD.Print($"获得了振奋特效 {(int)effect.Value} 层");
+					break;
+
+				case "weak_stacks":
+					ApplyStatus(_enemyStatuses, "weak", (int)effect.Value, 2);
+					GD.Print($"施加了虚弱 {(int)effect.Value} 层");
+					break;
+					
+				case "disarm_stacks":
+					ApplyStatus(_enemyStatuses, "disarm", (int)effect.Value, 1);
+					GD.Print($"缴械敌人 {(int)effect.Value} 层");
+					break;
+					
+				case "silence_stacks":
+					ApplyStatus(_enemyStatuses, "silence", (int)effect.Value, 1);
+					GD.Print($"沉默敌人 {(int)effect.Value} 层");
+					break;
+
+				case "purify":
+					// 解除自身所有的负面状态 (弱化, 易伤, 中毒, 燃烧, 晕眩等)
+					_playerStatuses.Remove("poison");
+					_playerStatuses.Remove("burn");
+					_playerStatuses.Remove("weak");
+					_playerStatuses.Remove("vulnerable");
+					_playerStatuses.Remove("freeze");
+					_playerStatuses.Remove("stun");
+					_playerStatuses.Remove("curse");
+					GD.Print("玩家触发了净化，移除了所有负面状态");
+					break;
+					
+				case "draw_cards":
+					for (int i = 0; i < (int)effect.Value; i++)
+					{
+						DrawCard();
+					}
+					GD.Print($"战术效果: 抽了 {(int)effect.Value} 张牌");
+					break;
+					
+				case "discard_cards":
+					// 暂时实现为随机丢弃，如果是特定UI选取丢牌需要更复杂的交互
+					for (int i = 0; i < (int)effect.Value; i++)
+					{
+						if (_playerHand.Count > 0)
+						{
+							var rdn = new Random();
+							int discardIdx = rdn.Next(_playerHand.Count);
+							string discardedId = _playerHand[discardIdx];
+							_playerHand.RemoveAt(discardIdx);
+							_playerDiscardPile.Add(discardedId);
+							GD.Print($"战术效果: 丢弃了手牌 {discardedId}");
+						}
+					}
+					break;
+					
+				case "gain_energy":
+					_playerEnergy += (int)effect.Value;
+					GD.Print($"临时获得了 {(int)effect.Value} 能量");
+					break;
+					
+				case "frenzy_stacks":
+					ApplyStatus(_playerStatuses, "frenzy", (int)effect.Value, -1);
+					GD.Print($"获得了狂暴特效 {(int)effect.Value} 层");
+					break;
+
+				case "focus_stacks":
+					ApplyStatus(_playerStatuses, "focus", (int)effect.Value, -1);
+					GD.Print($"获得了专注特效 {(int)effect.Value} 层");
+					break;
+
+				case "elemental_affinity_duration":
+					ApplyStatus(_playerStatuses, "elemental_affinity", 1, (int)effect.Value);
+					GD.Print($"获得了元素亲和，持续 {(int)effect.Value} 回合");
+					break;
+
+				case "combo_stance_stacks":
+					ApplyStatus(_playerStatuses, "combo_stance", (int)effect.Value, 1);
+					GD.Print($"获得了连击架势 {(int)effect.Value} 层");
+					break;
+
+				case "curse_stacks":
+					ApplyStatus(_playerStatuses, "curse", (int)effect.Value, 1);
+					GD.Print($"玩家受到了诅咒 {(int)effect.Value} 层");
+					break;
+
+				case "extra_turn_stacks":
+					_extraTurnRequested = true;
+					GD.Print("时光沙漏发动！回合结束时将发生时光倒流。");
 					break;
 					
 				default:
@@ -372,10 +599,66 @@ public partial class CombatSystem : Node2D
 		_eventBus.EmitEnemyDamaged(_currentEnemyId, actualDamage);
 		GD.Print($"对敌人造成 {actualDamage} 点伤害（包含护甲减免），敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
 	}
+
+	private void ApplyBurnDamageToEnemy(int stacks)
+	{
+		int burnDamage = 1 * stacks; // 1点固定伤害每层
+		if (HasStatus(_playerStatuses, "elemental_affinity"))
+		{
+			burnDamage += 3 * GetStatusStacks(_playerStatuses, "elemental_affinity");
+			GD.Print("元素亲和增幅了燃烧伤害");
+		}
+		
+		_currentEnemyHealth -= burnDamage;
+		
+		if (_currentEnemyHealth <= 0)
+		{
+			_currentEnemyHealth = 0;
+			EnemyDefeated();
+		}
+		
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, burnDamage);
+		GD.Print($"燃烧对敌人造成 {burnDamage} 点真实伤害，敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+	}
+	
+	// This method was missing from the provided context, adding it based on the instruction's implied structure.
+	public void ApplyDamageToPlayer(int damage)
+	{
+		if (_playerData == null) return;
+
+		int modifiedDamage = ApplyIncomingDamageModifiers(damage, _playerStatuses);
+		int actualDamage = Math.Max(0, modifiedDamage - _playerDefenseThisTurn);
+		
+		_playerData.CurrentHealth -= actualDamage;
+		if (_playerData.CurrentHealth <= 0)
+		{
+			_playerData.CurrentHealth = 0;
+			_eventBus.EmitCombatEnded(false);
+			EmitSignal(SignalName.CombatEnded, false);
+			GD.Print("玩家被击败！");
+		}
+		// 发送受伤事件
+		_eventBus.EmitPlayerDamaged(actualDamage);
+		
+		GD.Print($"玩家受到了 {actualDamage} 伤害，剩余生命值: {_playerData.CurrentHealth}/{_playerData.MaxHealth}");
+		
+		if (actualDamage > 0 && HasStatus(_playerStatuses, "reflect"))
+		{
+			int reflectDamage = 3 * GetStatusStacks(_playerStatuses, "reflect");
+			GD.Print($"玩家触发了反伤！对敌人造成 {reflectDamage} 点反射伤害。");
+			ApplyDamageToEnemy(reflectDamage);
+		}
+	}
 	
 	private void ApplyPoisonDamageToEnemy(int damage)
 	{
 		damage = ApplyIncomingDamageModifiers(damage, _enemyStatuses);
+		if (HasStatus(_playerStatuses, "elemental_affinity"))
+		{
+			damage += 3 * GetStatusStacks(_playerStatuses, "elemental_affinity");
+			GD.Print("元素亲和增幅了毒素伤害");
+		}
+		
 		_currentEnemyHealth -= damage;
 		
 		if (_currentEnemyHealth <= 0)
@@ -462,6 +745,14 @@ public partial class CombatSystem : Node2D
 		GD.Print("弃置手牌完毕");
 		// 呼叫一次UI刷新，让结束回合后的手牌消失
 		_eventBus.EmitCardPlayed("", ""); // 借用CardPlayed或者直接写一个UpdateHand的信号，或者直接等待敌人回合结束重新抽牌
+
+		if (_extraTurnRequested)
+		{
+			_extraTurnRequested = false;
+			GD.Print("【额外回合】触发！强制开启下一次玩家回合，跳过敌人行动。");
+			StartPlayerTurn();
+			return;
+		}
 		
 		// 开始敌人回合
 		StartEnemyTurn();
@@ -573,8 +864,11 @@ public partial class CombatSystem : Node2D
 	private void StartPlayerTurn()
 	{
 		_isPlayerTurn = true;
-		_playerEnergy = 3; // 重置能量
+		_playerEnergy = _playerData?.Energy ?? 3; // 重置能量
 		_playerExciteDrawCountThisTurn = 0;
+		_cardsPlayedThisTurn = 0;
+		_skillsPlayedThisTurn = 0;
+		_playerDefenseThisTurn = (_playerData?.Defense ?? 0); // 重新计算初始护甲，这里简化处理
 		ProcessTurnStartStatuses(isPlayer: true);
 
 		if (TryConsumeSkipTurn(_playerStatuses))
@@ -656,11 +950,11 @@ public partial class CombatSystem : Node2D
 		return (_currentEnemyHealth, _currentEnemyMaxHealth);
 	}
 	
-    // 返回玩家本回合的护甲/防御值（UI 显示用）
-    public int GetPlayerDefense()
-    {
-        return _playerDefenseThisTurn;
-    }
+	// 返回玩家本回合的护甲/防御值（UI 显示用）
+	public int GetPlayerDefense()
+	{
+		return _playerDefenseThisTurn;
+	}
 
 	public bool IsPlayerTurn()
 	{
@@ -761,6 +1055,16 @@ public partial class CombatSystem : Node2D
 		}
 	}
 
+	public int GetEnemyStatusStacksPublic(string statusId)
+	{
+		return GetStatusStacks(_enemyStatuses, statusId);
+	}
+	
+	public int GetPlayerStatusStacksPublic(string statusId)
+	{
+		return GetStatusStacks(_playerStatuses, statusId);
+	}
+
 	private bool TryConsumeSkipTurn(Dictionary<string, CombatStatusRuntime> statuses)
 	{
 		if (HasStatus(statuses, "stun"))
@@ -788,6 +1092,7 @@ public partial class CombatSystem : Node2D
 		if (HasStatus(statuses, "poison"))
 		{
 			int stacks = GetStatusStacks(statuses, "poison");
+			// 还原设定：根据最大生命值百分比造成伤害
 			int damage = Math.Max(1, Mathf.RoundToInt(maxHealth * 0.04f * stacks));
 			if (isPlayer)
 			{
@@ -814,6 +1119,7 @@ public partial class CombatSystem : Node2D
 		if (HasStatus(statuses, "burn"))
 		{
 			int stacks = GetStatusStacks(statuses, "burn");
+			// 还原设定：根据最大生命值百分比造成伤害
 			int damage = Math.Max(1, Mathf.RoundToInt(maxHealth * 0.08f * stacks));
 			if (isPlayer)
 			{
