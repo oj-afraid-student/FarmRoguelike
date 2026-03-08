@@ -984,59 +984,106 @@ public partial class DataManager : Node
     
     private void LoadEnemiesFromDirectory()
     {
-        // 确保文件夹存在并在真实设备上路径无误
-        string baseDir = ProjectSettings.GlobalizePath("res://Data/Enemy");
-        string normalDir = System.IO.Path.Combine(baseDir, "normal");
-        string bossDir = System.IO.Path.Combine(baseDir, "boss");
-        
-        if (System.IO.Directory.Exists(normalDir))
+        _normalEnemies.Clear();
+        _bossEnemies.Clear();
+
+        // 导出版中 res:// 位于 PCK 内，必须用 Godot 文件 API 读取。
+        LoadEnemyDirectory("res://Data/Enemy/normal", _normalEnemies, "普通");
+        LoadEnemyDirectory("res://Data/Enemy/boss", _bossEnemies, "Boss");
+
+        EnsureFallbackEnemies();
+    }
+
+    private void LoadEnemyDirectory(string dirPath, Dictionary<string, EnemyData> target, string label)
+    {
+        if (!DirAccess.DirExistsAbsolute(dirPath))
         {
-            string[] normalFiles = System.IO.Directory.GetFiles(normalDir, "*.json");
-            foreach (var path in normalFiles)
-            {
-                try
-                {
-                    string jsonString = System.IO.File.ReadAllText(path);
-                    var enemy = JsonSerializer.Deserialize<EnemyData>(jsonString);
-                    if (enemy != null && !string.IsNullOrEmpty(enemy.Id))
-                    {
-                        _normalEnemies[enemy.Id] = enemy;
-                    }
-                }
-                catch (Exception e)
-                {
-                    GD.PrintErr($"加载普通敌人失败: {path}, 错误: {e.Message}");
-                }
-            }
-        }
-        else
-        {
-            GD.PrintErr($"未找到普通敌人配置文件夹: {normalDir}");
+            GD.PrintErr($"未找到{label}敌人配置文件夹: {dirPath}");
+            return;
         }
 
-        if (System.IO.Directory.Exists(bossDir))
+        using var dir = DirAccess.Open(dirPath);
+        if (dir == null)
         {
-            string[] bossFiles = System.IO.Directory.GetFiles(bossDir, "*.json");
-            foreach (var path in bossFiles)
+            GD.PrintErr($"无法打开{label}敌人目录: {dirPath}");
+            return;
+        }
+
+        dir.ListDirBegin();
+        while (true)
+        {
+            var fileName = dir.GetNext();
+            if (string.IsNullOrEmpty(fileName))
             {
-                try
+                break;
+            }
+
+            if (dir.CurrentIsDir())
+            {
+                continue;
+            }
+
+            if (!fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string fullPath = $"{dirPath}/{fileName}";
+            try
+            {
+                using var file = FileAccess.Open(fullPath, FileAccess.ModeFlags.Read);
+                if (file == null)
                 {
-                    string jsonString = System.IO.File.ReadAllText(path);
-                    var enemy = JsonSerializer.Deserialize<EnemyData>(jsonString);
-                    if (enemy != null && !string.IsNullOrEmpty(enemy.Id))
-                    {
-                        _bossEnemies[enemy.Id] = enemy;
-                    }
+                    GD.PrintErr($"读取{label}敌人失败: {fullPath}");
+                    continue;
                 }
-                catch (Exception e)
+
+                string jsonString = file.GetAsText();
+                var enemy = JsonSerializer.Deserialize<EnemyData>(jsonString);
+                if (enemy != null && !string.IsNullOrEmpty(enemy.Id))
                 {
-                    GD.PrintErr($"加载Boss敌人失败: {path}, 错误: {e.Message}");
+                    target[enemy.Id] = enemy;
                 }
             }
+            catch (Exception e)
+            {
+                GD.PrintErr($"加载{label}敌人失败: {fullPath}, 错误: {e.Message}");
+            }
         }
-        else
+
+        dir.ListDirEnd();
+    }
+
+    private void EnsureFallbackEnemies()
+    {
+        if (_normalEnemies.Count == 0)
         {
-            GD.PrintErr($"未找到Boss敌人配置文件夹: {bossDir}");
+            _normalEnemies["enemy_fallback_slime"] = new EnemyData
+            {
+                Id = "enemy_fallback_slime",
+                Name = "应急史莱姆",
+                Health = 45,
+                Attack = 8,
+                Defense = 1,
+                RewardGold = 10,
+                RewardExp = 5
+            };
+            GD.PrintErr("普通敌人配置为空，已注入兜底普通敌人。");
+        }
+
+        if (_bossEnemies.Count == 0)
+        {
+            _bossEnemies["enemy_fallback_boss"] = new EnemyData
+            {
+                Id = "enemy_fallback_boss",
+                Name = "应急Boss",
+                Health = 120,
+                Attack = 14,
+                Defense = 3,
+                RewardGold = 40,
+                RewardExp = 20
+            };
+            GD.PrintErr("Boss敌人配置为空，已注入兜底Boss敌人。");
         }
     }
     

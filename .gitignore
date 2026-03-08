@@ -33,3 +33,7 @@ Thumbs.db
 /android/
 
 *.tmp
+
+# Local build artifacts
+build/*.exe
+build/data_*/

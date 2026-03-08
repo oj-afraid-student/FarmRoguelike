@@ -10,6 +10,7 @@ public partial class MapSystem : Node
     private List<List<RoomData>> _currentFloorMap;
     private Vector2I _currentPosition;
     private int _currentFloor = 1;
+    private readonly RandomNumberGenerator _rng = new RandomNumberGenerator();
     
     public RoomData CurrentRoom => GetRoom(_currentPosition);
     public int CurrentFloor => _currentFloor;
@@ -33,6 +34,7 @@ public partial class MapSystem : Node
 
     public void GenerateFloor(int floorNumber)
     {
+        _rng.Randomize();
         _currentFloor = floorNumber;
         _currentFloorMap = new List<List<RoomData>>();
         _currentPosition = new Vector2I(0, 0);
@@ -92,7 +94,6 @@ public partial class MapSystem : Node
             return GameEnums.RoomType.Boss;
         
         // 随机分配房间类型
-        var rand = new Random();
         var weights = new Dictionary<GameEnums.RoomType, float>
         {
             [GameEnums.RoomType.Combat] = 0.6f,
@@ -105,7 +106,7 @@ public partial class MapSystem : Node
             weights[GameEnums.RoomType.Combat] += 0.1f;
         
         var totalWeight = weights.Values.Sum();
-        var randomValue = rand.NextDouble() * totalWeight;
+        var randomValue = _rng.Randf() * totalWeight;
         
         float cumulative = 0;
         foreach (var kvp in weights)
@@ -137,6 +138,9 @@ public partial class MapSystem : Node
         room.IsVisited = true;
         
         GameRoot.Instance.EventBus.EmitRoomEntered(room);
+
+        // 关键逻辑直连 GameManager，避免导出版中事件订阅时序问题。
+        GameRoot.Instance?.GameManager?.HandleRoomEntryDirect(room);
         
         // 根据房间类型触发事件
         HandleRoomEnter(room);

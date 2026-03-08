@@ -54,6 +54,8 @@ public partial class UIManager : Control
 	// 游戏管理器引用
 	private GameManager _gameManager;
 	private DataManager _dataManager;
+	private EventBus _eventBus;
+	private bool _eventsSubscribed = false;
 	
 	// UI状态
 	private bool _isInitialized = false;
@@ -92,6 +94,7 @@ public partial class UIManager : Control
 		LoadUIScenes();
 		SetupNotificationSystem();
 		SubscribeToEvents();
+		CallDeferred(nameof(SubscribeToEvents));
 		InitializeUI();
 		
 		GD.Print("UIManager 初始化完成");
@@ -188,10 +191,16 @@ public partial class UIManager : Control
 
 	private void SubscribeToEvents()
 	{
-		var eventBus = EventBus.Instance;
+		if (_eventsSubscribed)
+		{
+			return;
+		}
+
+		var eventBus = GetEventBus();
 		if (eventBus == null)
 		{
-			GD.PrintErr("EventBus 未找到");
+			GD.PrintErr("UIManager: EventBus 未找到，延迟重试订阅");
+			CallDeferred(nameof(SubscribeToEvents));
 			return;
 		}
 		
@@ -245,8 +254,26 @@ public partial class UIManager : Control
 		eventBus.StatUpdated += OnStatUpdated;
 		eventBus.ItemCollected += OnItemCollected;
 		eventBus.CardAddedToDeck += OnCardAddedToDeck;
+
+		_eventsSubscribed = true;
 		
 		GD.Print("UI事件订阅完成");
+	}
+
+	private EventBus GetEventBus()
+	{
+		if (_eventBus != null && IsInstanceValid(_eventBus))
+		{
+			return _eventBus;
+		}
+
+		_eventBus = EventBus.Instance;
+		if (_eventBus == null)
+		{
+			_eventBus = GetNodeOrNull<EventBus>("/root/EventBus");
+		}
+
+		return _eventBus;
 	}
 
 	private void InitializeUI()
@@ -653,7 +680,21 @@ public partial class UIManager : Control
 				ShowNotification("至少选择一张卡牌！");
 				return;
 			}
-			EventBus.Instance?.EmitCombatCardSelected(_preCombatEnemyId, _preCombatSelectedCards);
+			var enemyId = _preCombatEnemyId;
+			if (string.IsNullOrWhiteSpace(enemyId))
+			{
+				enemyId = _dataManager?.GetRandomNormalEnemy()?.Id ?? "enemy_fallback_slime";
+			}
+
+			var selectedCards = new List<string>(_preCombatSelectedCards);
+			if (_gameManager != null)
+			{
+				_gameManager.StartCombatFromSelection(enemyId, selectedCards);
+			}
+			else
+			{
+				GetEventBus()?.EmitCombatCardSelected(enemyId, selectedCards);
+			}
 		};
 		vbox.AddChild(confirmBtn);
 
@@ -2603,6 +2644,14 @@ public partial class UIManager : Control
 		
 		// 更新战斗UI中的敌人信息
 		UpdateCombatEnemyInfo(enemyId);
+	}
+
+	// 在导出版事件链不稳定时，供 GameManager 直接强制进入战斗界面。
+	public void ForceEnterCombatUI(string enemyId)
+	{
+		_lastGameState = (GameEnums.GameState)(-1);
+		OnGameStateChanged(GameEnums.GameState.Combat);
+		OnCombatStarted(enemyId);
 	}
 
 	private void UpdateCombatEnemyInfo(string specificEnemyId = null)

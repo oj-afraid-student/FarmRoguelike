@@ -89,6 +89,8 @@ public partial class GameManager : Node
     
     // 私有字段
     private DataManager _dataManager;
+    private EventBus _eventBus;
+    private bool _eventsSubscribed = false;
     private readonly RandomNumberGenerator _rng = new RandomNumberGenerator();
     
     public override void _Ready()
@@ -97,6 +99,7 @@ public partial class GameManager : Node
         InitializePlayerData();
         InitializeDataManager();
         SubscribeToEvents();
+        CallDeferred(nameof(SubscribeToEvents));
         
         GD.Print("GameManager 初始化完成");
 
@@ -106,7 +109,29 @@ public partial class GameManager : Node
 
     private void EmitInitialState()
     {
-        EventBus.Instance?.EmitGameStateChanged(CurrentState);
+        GetEventBus()?.EmitGameStateChanged(CurrentState);
+    }
+
+    private EventBus GetEventBus()
+    {
+        if (_eventBus != null)
+        {
+            return _eventBus;
+        }
+
+        _eventBus = EventBus.Instance ?? GetNodeOrNull<EventBus>("/root/EventBus");
+        return _eventBus;
+    }
+
+    private UIManager FindUIManager()
+    {
+        var root = GetTree()?.Root;
+        if (root == null)
+        {
+            return null;
+        }
+
+        return root.FindChild("UIManager", true, false) as UIManager;
     }
     
     private void InitializePlayerData()
@@ -155,8 +180,18 @@ public partial class GameManager : Node
     
     private void SubscribeToEvents()
     {
-        var eventBus = EventBus.Instance;
-        if (eventBus == null) return;
+        if (_eventsSubscribed)
+        {
+            return;
+        }
+
+        var eventBus = GetEventBus();
+        if (eventBus == null)
+        {
+            GD.PrintErr("GameManager: EventBus 未就绪，稍后重试订阅");
+            CallDeferred(nameof(SubscribeToEvents));
+            return;
+        }
         
         eventBus.PlayerDamaged += OnPlayerDamaged;
         eventBus.EnemyDamaged += OnEnemyDamaged;
@@ -167,10 +202,23 @@ public partial class GameManager : Node
         eventBus.StatUpdated += OnStatUpdated;
         eventBus.CropEffectApplied += OnCropEffectApplied;
         eventBus.CropEffectRemoved += OnCropEffectRemoved;
-        eventBus.RoomEntered += OnRoomEntered;
         eventBus.FloorCompleted += OnFloorCompleted;
         eventBus.CardPlayed += OnCardPlayed;
         eventBus.CombatCardSelected += OnCombatCardSelected;
+
+        _eventsSubscribed = true;
+    }
+
+    // UI 可直接调用，避免仅依赖 EventBus 订阅导致的战斗无法开始。
+    public void StartCombatFromSelection(string enemyId, List<string> selectedCards)
+    {
+        OnCombatCardSelected(enemyId, selectedCards);
+    }
+
+    // 由 MapSystem 直接调用，避免 EventBus 订阅时序导致房间逻辑不触发。
+    public void HandleRoomEntryDirect(RoomData room)
+    {
+        OnRoomEntered(room);
     }
     
     // 公共方法
@@ -182,7 +230,7 @@ public partial class GameManager : Node
         ResetFloorStatistics();
         GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
         ChangeState(GameEnums.GameState.MapExploration);
-        EventBus.Instance.EmitGameStarted();
+        GetEventBus()?.EmitGameStarted();
         GD.Print("新游戏开始");      
     }
 
@@ -195,7 +243,7 @@ public partial class GameManager : Node
         CurrentFloor = 1;
         // 不生成地图，直接进入耕作状态
         ChangeState(GameEnums.GameState.Farming);
-        EventBus.Instance.EmitGameStarted();
+        GetEventBus()?.EmitGameStarted();
         GD.Print("新游戏（仅农场）初始化完成");
     }
 
@@ -203,7 +251,7 @@ public partial class GameManager : Node
     {
         InitializePlayerData();
         ChangeState(GameEnums.GameState.MainMenu);
-        EventBus.Instance.EmitGameStarted();
+        GetEventBus()?.EmitGameStarted();
     }
 
 
@@ -222,7 +270,7 @@ public partial class GameManager : Node
         }
         
         CurrentState = newState;
-        EventBus.Instance.EmitGameStateChanged(newState);
+        GetEventBus()?.EmitGameStateChanged(newState);
         
         GD.Print($"游戏状态改变: {newState}");
         
@@ -235,12 +283,12 @@ public partial class GameManager : Node
         
         if (IsPaused)
         {
-            EventBus.Instance.EmitGamePaused();
+            GetEventBus()?.EmitGamePaused();
             GD.Print("游戏暂停");
         }
         else
         {
-            EventBus.Instance.EmitGameResumed();
+            GetEventBus()?.EmitGameResumed();
             GD.Print("游戏继续");
         }
     }
@@ -380,9 +428,13 @@ public partial class GameManager : Node
                 {
                     string msg = $"[系统] 你遭遇了敌人 {normalEnemy.Name}！准备战斗。";
                     GD.Print(msg);
-                    EventBus.Instance?.EmitNotificationRequested(msg);
-                    ChangeState(GameEnums.GameState.PreCombat);
-                    EventBus.Instance?.EmitPreCombatRequested(normalEnemy.Id, false);
+                    GetEventBus()?.EmitNotificationRequested(msg);
+
+                    // 导出版优先保证可进入战斗：直接用当前卡组开战。
+                    var selectedCards = PlayerData?.Deck != null
+                        ? new List<string>(PlayerData.Deck)
+                        : new List<string>();
+                    StartCombatFromSelection(normalEnemy.Id, selectedCards);
                 }
                 else
                 {
@@ -398,9 +450,12 @@ public partial class GameManager : Node
                 {
                     string msg = $"[系统] 你遭遇了强大的Boss {bossEnemy.Name}！";
                     GD.Print(msg);
-                    EventBus.Instance?.EmitNotificationRequested(msg);
-                    ChangeState(GameEnums.GameState.PreCombat);
-                    EventBus.Instance?.EmitPreCombatRequested(bossEnemy.Id, true);
+                    GetEventBus()?.EmitNotificationRequested(msg);
+
+                    var selectedCards = PlayerData?.Deck != null
+                        ? new List<string>(PlayerData.Deck)
+                        : new List<string>();
+                    StartCombatFromSelection(bossEnemy.Id, selectedCards);
                 }
                 else
                 {
@@ -451,9 +506,17 @@ public partial class GameManager : Node
         {
             PlayerData.CurrentCombatDeck = new List<string>(selectedCards);
         }
-        
-        EventBus.Instance?.EmitCombatStarted(enemyId);
+
+        if (string.IsNullOrWhiteSpace(enemyId))
+        {
+            enemyId = _dataManager?.GetRandomNormalEnemy()?.Id ?? "enemy_fallback_slime";
+        }
+
+        GameRoot.Instance?.CombatSystem?.StartCombat(enemyId);
+
+        GetEventBus()?.EmitCombatStarted(enemyId);
         ChangeState(GameEnums.GameState.Combat);
+        FindUIManager()?.ForceEnterCombatUI(enemyId);
     }
     
     private void OnCombatEnded(bool playerWon)
