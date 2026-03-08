@@ -3600,6 +3600,11 @@ public partial class CardUI : Button
 {
 	public CardData CardData { get; private set; }
 	public event Action<CardUI> CardClicked;
+
+	// 悬停升起效果
+	private const float HoverRisePixels = 40f;
+	private const float HoverAnimDuration = 0.15f;
+	private Tween _tween;
 	
 	public CardUI(CardData cardData)
 	{
@@ -3649,6 +3654,10 @@ public partial class CardUI : Button
 		
 		// 点击事件
 		Pressed += OnCardPressed;
+
+		// 悬停升起事件
+		MouseEntered += OnMouseEntered;
+		MouseExited += OnMouseExited;
 	}
 
 	private Texture2D LoadCardTexture()
@@ -3682,6 +3691,24 @@ public partial class CardUI : Button
 		return null;
 	}
 	
+	private void OnMouseEntered()
+	{
+		_tween?.Kill();
+		_tween = CreateTween();
+		_tween.TweenProperty(this, "position:y", -HoverRisePixels, HoverAnimDuration)
+			.SetEase(Tween.EaseType.Out)
+			.SetTrans(Tween.TransitionType.Cubic);
+	}
+
+	private void OnMouseExited()
+	{
+		_tween?.Kill();
+		_tween = CreateTween();
+		_tween.TweenProperty(this, "position:y", 0f, HoverAnimDuration)
+			.SetEase(Tween.EaseType.Out)
+			.SetTrans(Tween.TransitionType.Cubic);
+	}
+
 	private void OnCardPressed()
 	{
 		CardClicked?.Invoke(this);
