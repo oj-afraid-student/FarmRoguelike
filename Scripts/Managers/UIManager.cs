@@ -2930,8 +2930,6 @@ public partial class UIManager : Control
 					if (pos == currentRoom.Position)
 					{
 						cell.Color = new Color(0.8f, 0.8f, 0.2f, 1f); // 亮黄色
-						label.Text = "You";
-						label.AddThemeColorOverride("font_color", new Color(0, 0, 0, 1));
 						if (texCurrent != null)
 							icon.Texture = texCurrent;
 					}
@@ -2947,7 +2945,6 @@ public partial class UIManager : Control
 					else if (currentRoom.Connections.Contains(pos))
 					{
 						cell.Color = new Color(0.6f, 0.6f, 0.6f, 1f); // 亮灰色
-						label.Text = "?";
 						if (texReachable != null)
 							icon.Texture = texReachable;
 					}
@@ -2955,7 +2952,6 @@ public partial class UIManager : Control
 					// 如果是特殊房间特殊标记（在“当前位置/已访问/邻接可走”逻辑基础上再叠加）
 					if (room.Type == GameEnums.RoomType.Boss)
 					{
-						label.Text = "B";
 						if (texBoss != null)
 							icon.Texture = texBoss;
 
@@ -2968,7 +2964,6 @@ public partial class UIManager : Control
 					{
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
-							label.Text = "T";
 							if (texTrap != null)
 								icon.Texture = texTrap;
 							cell.Color = new Color(0.5f, 0.3f, 0.1f, 1f); // 橘黑/暗橙
@@ -2978,7 +2973,6 @@ public partial class UIManager : Control
 					{
 						if (pos != currentRoom.Position && !room.IsVisited)
 						{
-							label.Text = "R";
 							if (texReward != null)
 								icon.Texture = texReward;
 							cell.Color = new Color(0.1f, 0.5f, 0.5f, 1f); // 蓝绿
