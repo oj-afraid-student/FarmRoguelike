@@ -166,15 +166,22 @@ public partial class CombatSystem : Node2D
 		_playerHand.Clear();
 		_playerDiscardPile.Clear();
 		
-		if (_playerData != null && _playerData.Deck != null)
+		if (_playerData != null)
 		{
-			foreach (var cardId in _playerData.Deck)
+			List<string> sourceDeck = _playerData.CurrentCombatDeck != null && _playerData.CurrentCombatDeck.Count > 0 
+				? _playerData.CurrentCombatDeck 
+				: _playerData.Deck;
+				
+			if (sourceDeck != null)
 			{
-				_playerDrawPile.Add(cardId);
+				foreach (var cardId in sourceDeck)
+				{
+					_playerDrawPile.Add(cardId);
+				}
+				
+				// 洗牌
+				ShuffleDeck(_playerDrawPile);
 			}
-			
-			// 洗牌
-			ShuffleDeck(_playerDrawPile);
 		}
 	}
 	
@@ -295,12 +302,19 @@ public partial class CombatSystem : Node2D
 			}
 		}
 
+		// 检查这张牌是否有净化效果
+		bool hasPurify = cardData.Effects != null && cardData.Effects.ContainsKey("purify");
+
 		// 处理诅咒：每打出一张牌受到伤害
-		if (HasStatus(_playerStatuses, "curse"))
+		if (HasStatus(_playerStatuses, "curse") && !hasPurify)
 		{
 			int curseDmg = 2 * GetStatusStacks(_playerStatuses, "curse");
 			GD.Print($"诅咒发作！玩家受到 {curseDmg} 点伤害");
 			ApplyDamageToPlayer(curseDmg);
+		}
+		else if (HasStatus(_playerStatuses, "curse") && hasPurify)
+		{
+			GD.Print("打出了净化牌，本次诅咒发作被免疫，准备清除诅咒");
 		}
 		
 		// 处理卡牌效果
@@ -320,11 +334,6 @@ public partial class CombatSystem : Node2D
 		
 		GD.Print($"玩家打出卡牌: {cardId}，剩余能量: {_playerEnergy}");
 		
-		// 如果玩家没有能量了，结束回合
-		if (_playerEnergy <= 0)
-		{
-			EndPlayerTurn();
-		}
 	}
 	
 	private void ProcessCardEffect(string cardId, string targetId)

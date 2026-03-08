@@ -1,0 +1,14 @@
+{
+  "Id": "enemy_tutorial_dummy",
+  "Name": "教学木桩",
+  "Health": 99,
+  "Attack": 9999,
+  "Defense": 0,
+  "Abilities": [
+    "绝对抹杀：造成 9999 点伤害。如果你看到这个技能，说明你的连招断了！"
+  ],
+  "AiPattern": ["Bite"],
+  "RewardGold": 0,
+  "RewardExp": 0,
+  "RewardItems": []
+}

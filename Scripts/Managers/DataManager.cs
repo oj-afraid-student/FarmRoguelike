@@ -288,8 +288,8 @@ public partial class DataManager : Node
         };
         _cards["card_devil_pact"] = new CardData
         {
-            Id = "card_devil_pact", Name = "恶魔契约", Type = GameEnums.CardType.Skill, Cost = 0, Description = "抽 3 张牌，本回合获得诅咒（打牌掉血）。",
-            Effects = new Dictionary<string, float> { { "draw_cards", 3f }, { "curse_stacks", 1f } }
+            Id = "card_devil_pact", Name = "恶魔契约", Type = GameEnums.CardType.Skill, Cost = 0, Description = "抽 4 张牌，本回合获得诅咒（打牌掉血）。",
+            Effects = new Dictionary<string, float> { { "draw_cards", 4f }, { "curse_stacks", 1f } }
         };
         _cards["card_hourglass"] = new CardData
         {

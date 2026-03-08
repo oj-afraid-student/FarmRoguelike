@@ -26,6 +26,7 @@ public partial class UIManager : Control
 	private Control _currentPauseMenu;
 	private Control _currentEnderChestUI;
 	private Control _currentSaveLoadUI;   // 存档/读档界面实例
+	private Control _currentPreCombatUI;  // 战斗前选择卡牌UI
 
 	
 	// 画布层保证渲染在其上
@@ -230,6 +231,12 @@ public partial class UIManager : Control
 		// Boss 击败后选择返回农场
 		eventBus.BossDefeated += OnBossDefeated;
 		
+		// 战斗前事件
+		eventBus.PreCombatRequested += OnPreCombatRequested;
+		
+		// 教程失败事件
+		eventBus.TutorialFailedEvent += ShowTutorialFailureUI;
+
 		// 战斗物资事件
 		eventBus.CombatResourcesGenerated += OnCombatResourcesGenerated;
 		eventBus.ResourceAppliedToCrop += OnResourceAppliedToCrop;
@@ -277,6 +284,10 @@ public partial class UIManager : Control
 				
 			case GameEnums.GameState.MapExploration:
 				ShowMapUI();
+				break;
+				
+			case GameEnums.GameState.PreCombat:
+				ShowPreCombatUI();
 				break;
 				
 			case GameEnums.GameState.Combat:
@@ -554,6 +565,253 @@ public partial class UIManager : Control
 		ShowNotification("进入农场");
 		SetupFarmUI();
 	}
+	
+	private string _preCombatEnemyId = "";
+	private bool _preCombatIsBoss = false;
+	private List<string> _preCombatSelectedCards = new List<string>();
+
+	private void OnPreCombatRequested(string enemyId, bool isBoss)
+	{
+		_preCombatEnemyId = enemyId;
+		_preCombatIsBoss = isBoss;
+		// 状态已经在 GameManager 中切换到了 PreCombat，所以 OnGameStateChanged 会调用 ShowPreCombatUI
+	}
+
+	private void ShowPreCombatUI()
+	{
+		_currentPreCombatUI = new Panel();
+		_currentPreCombatUI.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		_uiLayer.AddChild(_currentPreCombatUI);
+
+		// 背景调暗
+		var bgList = new ColorRect();
+		bgList.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		bgList.Color = new Color(0, 0, 0, 0.8f);
+		_currentPreCombatUI.AddChild(bgList);
+
+		var vbox = new VBoxContainer();
+		vbox.SetAnchorsPreset(Control.LayoutPreset.Center);
+		_currentPreCombatUI.AddChild(vbox);
+
+		var title = new Label();
+		title.Text = "选择本场战斗携带的卡牌";
+		title.HorizontalAlignment = HorizontalAlignment.Center;
+		title.AddThemeFontSizeOverride("font_size", 32);
+		vbox.AddChild(title);
+
+		var scroll = new ScrollContainer();
+		scroll.CustomMinimumSize = new Vector2(800, 400);
+		vbox.AddChild(scroll);
+
+		var grid = new GridContainer();
+		grid.Columns = 5;
+		grid.AddThemeConstantOverride("h_separation", 10);
+		grid.AddThemeConstantOverride("v_separation", 10);
+		scroll.AddChild(grid);
+
+		if (_gameManager?.PlayerData?.Deck != null)
+		{
+			_preCombatSelectedCards.Clear();
+			foreach (var cardId in _gameManager.PlayerData.Deck)
+			{
+				var cardData = _dataManager?.GetCard(cardId);
+				if (cardData == null) continue;
+
+				var cardBtn = new Button();
+				cardBtn.CustomMinimumSize = new Vector2(120, 160);
+				cardBtn.Text = $"{cardData.Name}\n{cardData.Cost} 费\n{cardData.Type}";
+				
+				// 默认全部选中
+				if (!_preCombatSelectedCards.Contains(cardId)) {
+					_preCombatSelectedCards.Add(cardId);
+				}
+				cardBtn.Modulate = new Color(1, 1, 1, 1);
+				
+				cardBtn.Pressed += () => {
+					if (_preCombatSelectedCards.Contains(cardId))
+					{
+						_preCombatSelectedCards.Remove(cardId);
+						cardBtn.Modulate = new Color(0.5f, 0.5f, 0.5f, 1);
+					}
+					else
+					{
+						_preCombatSelectedCards.Add(cardId);
+						cardBtn.Modulate = new Color(1, 1, 1, 1);
+					}
+				};
+				grid.AddChild(cardBtn);
+			}
+		}
+
+		var confirmBtn = new Button();
+		confirmBtn.Text = "确认出战";
+		confirmBtn.CustomMinimumSize = new Vector2(200, 50);
+		confirmBtn.AddThemeFontSizeOverride("font_size", 24);
+		confirmBtn.Pressed += () => {
+			if (_preCombatSelectedCards.Count == 0)
+			{
+				ShowNotification("至少选择一张卡牌！");
+				return;
+			}
+			EventBus.Instance?.EmitCombatCardSelected(_preCombatEnemyId, _preCombatSelectedCards);
+		};
+		vbox.AddChild(confirmBtn);
+
+		// 添加教程按钮
+		var tutorialBtn = new Button();
+		tutorialBtn.Text = "教程";
+		tutorialBtn.CustomMinimumSize = new Vector2(200, 50);
+		tutorialBtn.AddThemeFontSizeOverride("font_size", 24);
+		tutorialBtn.Pressed += () => {
+			ShowTutorialSelectionUI();
+			// 关闭预战斗UI
+			_currentPreCombatUI.QueueFree();
+			_currentPreCombatUI = null;
+		};
+		vbox.AddChild(tutorialBtn);
+	}
+	
+	private void ShowTutorialSelectionUI()
+	{
+		var selectionPanel = new Panel();
+		selectionPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		_uiLayer.AddChild(selectionPanel);
+
+		var bg = new ColorRect();
+		bg.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		bg.Color = new Color(0, 0, 0, 0.9f);
+		selectionPanel.AddChild(bg);
+
+		var vbox = new VBoxContainer();
+		vbox.SetAnchorsPreset(Control.LayoutPreset.Center);
+		vbox.AddThemeConstantOverride("separation", 30);
+		selectionPanel.AddChild(vbox);
+
+		var title = new Label();
+		title.Text = "选择训练阶段";
+		title.AddThemeFontSizeOverride("font_size", 48);
+		title.HorizontalAlignment = HorizontalAlignment.Center;
+		vbox.AddChild(title);
+
+		// Stage 1 Button
+		var stage1Btn = new Button();
+		stage1Btn.Text = "阶段一：时停流基础";
+		stage1Btn.CustomMinimumSize = new Vector2(300, 60);
+		stage1Btn.AddThemeFontSizeOverride("font_size", 24);
+		stage1Btn.Pressed += () => {
+			selectionPanel.QueueFree();
+			_gameManager?.StartTutorialStage(1);
+		};
+		vbox.AddChild(stage1Btn);
+
+		// Stage 2 Button
+		var stage2Btn = new Button();
+		bool stage1Cleared = _gameManager?.PlayerData?.HasClearedTutorialStage1 ?? false;
+		if (stage1Cleared)
+		{
+			stage2Btn.Text = "阶段二：血魔法进阶";
+			stage2Btn.CustomMinimumSize = new Vector2(300, 60);
+			stage2Btn.AddThemeFontSizeOverride("font_size", 24);
+			stage2Btn.Pressed += () => {
+				selectionPanel.QueueFree();
+				_gameManager?.StartTutorialStage(2);
+			};
+		}
+		else
+		{
+			stage2Btn.Text = " 🔒 [需先通关阶段一] ";
+			stage2Btn.CustomMinimumSize = new Vector2(300, 60);
+			stage2Btn.AddThemeFontSizeOverride("font_size", 24);
+			stage2Btn.Disabled = true;
+		}
+		vbox.AddChild(stage2Btn);
+
+		// Close Button
+		var closeBtn = new Button();
+		closeBtn.Text = "关闭/返回";
+		closeBtn.CustomMinimumSize = new Vector2(300, 60);
+		closeBtn.AddThemeFontSizeOverride("font_size", 24);
+		closeBtn.Pressed += () => {
+			selectionPanel.QueueFree();
+		};
+		vbox.AddChild(closeBtn);
+	}
+	
+	private void ShowTutorialFailureUI()
+	{
+		var tutorialPanel = new Panel();
+		tutorialPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		_uiLayer.AddChild(tutorialPanel);
+
+		var bg = new ColorRect();
+		bg.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		bg.Color = new Color(0, 0, 0, 0.9f);
+		tutorialPanel.AddChild(bg);
+
+		var vbox = new VBoxContainer();
+		vbox.SetAnchorsPreset(Control.LayoutPreset.Center);
+		vbox.AddThemeConstantOverride("separation", 20);
+		tutorialPanel.AddChild(vbox);
+
+		var title = new Label();
+		title.Text = "哎呀，看来你的无限连击断了！";
+		title.AddThemeFontSizeOverride("font_size", 36);
+		title.HorizontalAlignment = HorizontalAlignment.Center;
+		title.Modulate = new Color(1f, 0.4f, 0.4f);
+		vbox.AddChild(title);
+
+		var desc = new Label();
+		int currentStage = _gameManager?.PlayerData?.TutorialStage ?? 1;
+		
+		if (currentStage == 1)
+		{
+			desc.Text = "这套无限连击的核心在于【时光沙漏】的重置机制：\n\n" +
+						"1. 打出【时光沙漏】(耗费2)，你还剩1费。结束回合后你将立刻开启一个新的额外回合！\n" +
+						"2. 在这剩余的1费期间，打出【锄头连击】(耗费1，但攻击时会恢复1费)。\n" +
+						"3. 你的费用重新变为1。此时点击【结束回合】。\n" +
+						"4. 额外回合开始，手牌被清空，重抽5张牌，能量恢复为满(3点)。\n" +
+						"5. 由于你的牌库只有2张牌，【时光沙漏】和【锄头连击】又回到了你的手里。\n" +
+						"不断的额外回合 = 不断的无消耗输出！";
+		}
+		else
+		{
+			desc.Text = "血魔法无限连的核心在于【恶魔契约】的超强过牌：\n\n" +
+						"1. 打出【干劲】获得 1 点临时能量。\n" +
+						"2. 打出0费的【恶魔契约】抽满 4 张牌，但你会获得【诅咒】(打牌掉血)。\n" +
+						"3. 打出【净化】消耗 1 费，清掉你身上的【诅咒】BUFF，避免暴毙。\n" +
+						"4. 此时你的牌库抽空了，弃牌堆的卡又会洗回来。期间插入【锄头连击】打伤害。\n" +
+						"5. 循环往复，利用干劲苟住能量，契约爆牌，净化保命！";
+		}
+		
+		desc.AddThemeFontSizeOverride("font_size", 20);
+		desc.HorizontalAlignment = HorizontalAlignment.Center;
+		vbox.AddChild(desc);
+
+		var hbox = new HBoxContainer();
+		hbox.Alignment = BoxContainer.AlignmentMode.Center;
+		hbox.AddThemeConstantOverride("separation", 50);
+		vbox.AddChild(hbox);
+
+		var retryBtn = new Button();
+		retryBtn.Text = "再试一次";
+		retryBtn.CustomMinimumSize = new Vector2(160, 50);
+		retryBtn.AddThemeFontSizeOverride("font_size", 24);
+		retryBtn.Pressed += () => {
+			tutorialPanel.QueueFree();
+			_gameManager?.StartTutorialStage(currentStage);
+		};
+		hbox.AddChild(retryBtn);
+
+		var exitBtn = new Button();
+		exitBtn.Text = "返回农场";
+		exitBtn.CustomMinimumSize = new Vector2(160, 50);
+		exitBtn.AddThemeFontSizeOverride("font_size", 24);
+		exitBtn.Pressed += () => {
+			tutorialPanel.QueueFree();
+			_gameManager?.ExitTutorial();
+		};
+		hbox.AddChild(exitBtn);
+	}
 
 	private void BindFarmUINodesFromScene(Control farmRoot)
 	{
@@ -671,6 +929,12 @@ public partial class UIManager : Control
 		{
 			_currentMapUI.QueueFree();
 			_currentMapUI = null;
+		}
+		
+		if (_currentPreCombatUI != null)
+		{
+			_currentPreCombatUI.QueueFree();
+			_currentPreCombatUI = null;
 		}
 		
 		if (_currentRewardUI != null)
@@ -1633,6 +1897,15 @@ public partial class UIManager : Control
 		closeBtn.CustomMinimumSize = new Vector2(120, 44);
 		closeBtn.Pressed += OnCloseFarmButtonPressed;
 		leftCol.AddChild(closeBtn);
+
+		var tutorialBtn = new Button();
+		tutorialBtn.Text = "教程";
+		tutorialBtn.CustomMinimumSize = new Vector2(120, 44);
+		tutorialBtn.Modulate = new Color(1f, 0.8f, 0.2f); // 金色醒目
+		tutorialBtn.Pressed += () => {
+			ShowTutorialSelectionUI();
+		};
+		leftCol.AddChild(tutorialBtn);
 
 		// 中央地块列：保证地块网格始终位于界面中心
 		var centerCol = new VBoxContainer();
@@ -3353,7 +3626,25 @@ public partial class CardUI : Button
 			var fallback = new ColorRect();
 			fallback.Color = new Color(0.08f, 0.08f, 0.12f, 0.95f);
 			fallback.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			fallback.MouseFilter = Control.MouseFilterEnum.Ignore; // 忽略鼠标事件以便按钮本身触发
 			AddChild(fallback);
+			
+			// 对于没有图片的卡，至少显示名字和费用，否则完全黑屏
+			var nameLabel = new Label();
+			nameLabel.Text = CardData.Name;
+			nameLabel.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
+			nameLabel.Position = new Vector2(0, 10);
+			nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			nameLabel.MouseFilter = Control.MouseFilterEnum.Ignore; // 忽略鼠标点击
+			fallback.AddChild(nameLabel);
+			
+			var costLabel = new Label();
+			costLabel.Text = $"{CardData.Cost} 费";
+			costLabel.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
+			costLabel.Position = new Vector2(0, -30);
+			costLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			costLabel.MouseFilter = Control.MouseFilterEnum.Ignore; // 忽略鼠标点击
+			fallback.AddChild(costLabel);
 		}
 		
 		// 点击事件

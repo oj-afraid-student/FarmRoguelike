@@ -170,6 +170,7 @@ public partial class GameManager : Node
         eventBus.RoomEntered += OnRoomEntered;
         eventBus.FloorCompleted += OnFloorCompleted;
         eventBus.CardPlayed += OnCardPlayed;
+        eventBus.CombatCardSelected += OnCombatCardSelected;
     }
     
     // 公共方法
@@ -253,6 +254,13 @@ public partial class GameManager : Node
         
         if (PlayerData.CurrentHealth <= 0)
         {
+            if (PlayerData != null && PlayerData.IsInTutorial)
+            {
+                // 在教程中死亡，不走常规结算
+                ChangeState(GameEnums.GameState.Farming); // 临时切回一个安全状态以隐藏战斗UI
+                EventBus.Instance?.EmitTutorialFailedEvent();
+                return;
+            }
             GameOver(false);
         }
     }
@@ -306,6 +314,8 @@ public partial class GameManager : Node
     
     private void GameOver(bool isVictory)
     {
+        if (PlayerData != null && PlayerData.IsInTutorial) return;
+        
         ChangeState(GameEnums.GameState.GameOver);
         EventBus.Instance.EmitGameEnded(isVictory);
         
@@ -371,8 +381,8 @@ public partial class GameManager : Node
                     string msg = $"[系统] 你遭遇了敌人 {normalEnemy.Name}！准备战斗。";
                     GD.Print(msg);
                     EventBus.Instance?.EmitNotificationRequested(msg);
-                    EventBus.Instance?.EmitCombatStarted(normalEnemy.Id);
-                    ChangeState(GameEnums.GameState.Combat);
+                    ChangeState(GameEnums.GameState.PreCombat);
+                    EventBus.Instance?.EmitPreCombatRequested(normalEnemy.Id, false);
                 }
                 else
                 {
@@ -389,8 +399,8 @@ public partial class GameManager : Node
                     string msg = $"[系统] 你遭遇了强大的Boss {bossEnemy.Name}！";
                     GD.Print(msg);
                     EventBus.Instance?.EmitNotificationRequested(msg);
-                    EventBus.Instance?.EmitCombatStarted(bossEnemy.Id);
-                    ChangeState(GameEnums.GameState.Combat);
+                    ChangeState(GameEnums.GameState.PreCombat);
+                    EventBus.Instance?.EmitPreCombatRequested(bossEnemy.Id, true);
                 }
                 else
                 {
@@ -435,8 +445,45 @@ public partial class GameManager : Node
         }
     }
     
+    private void OnCombatCardSelected(string enemyId, List<string> selectedCards)
+    {
+        if (PlayerData != null)
+        {
+            PlayerData.CurrentCombatDeck = new List<string>(selectedCards);
+        }
+        
+        EventBus.Instance?.EmitCombatStarted(enemyId);
+        ChangeState(GameEnums.GameState.Combat);
+    }
+    
     private void OnCombatEnded(bool playerWon)
     {
+        if (PlayerData != null && PlayerData.IsInTutorial)
+        {
+            if (!playerWon)
+            {
+                // 在教程中死亡，不走常规结算
+                ChangeState(GameEnums.GameState.Farming); // 退回农场以隐藏战斗UI
+                EventBus.Instance?.EmitTutorialFailedEvent();
+                return;
+            }
+            else
+            {
+                // 教程胜利
+                if (PlayerData.TutorialStage == 1)
+                {
+                    PlayerData.HasClearedTutorialStage1 = true;
+                    EventBus.Instance?.EmitNotificationRequested("[系统] 阶段一通关！已解锁阶段二。返回农场。");
+                }
+                else if (PlayerData.TutorialStage == 2)
+                {
+                    EventBus.Instance?.EmitNotificationRequested("[系统] 所有教程通关！返回农场。");
+                }
+                ExitTutorial();
+                return;
+            }
+        }
+
         if (playerWon)
         {
             string msg = "[系统] 战斗胜利！";
@@ -598,7 +645,6 @@ public partial class GameManager : Node
 
         if (_dataManager == null || PlayerData == null)
             return new List<string>();
-
         var unlockedNow = _dataManager.GetUnlockableCardIdsByTriggers(triggerKeywords, PlayerData.UnlockedCards);
         if (unlockedNow == null || unlockedNow.Count == 0)
             return new List<string>();
@@ -946,5 +992,81 @@ public partial class GameManager : Node
         }
         
         return resourceSystem.GetPlayerResources();
+    }
+
+    // ==========================================
+    // 教程流处理
+    // ==========================================
+    public void StartInfiniteTutorial()
+    {
+        if (PlayerData == null) return;
+        
+        // 弹出选关UI
+        var uiManager = GetNode<UIManager>("/root/UIManager");
+        if (uiManager != null)
+        {
+            uiManager.Call("ShowTutorialSelectionUI");
+        }
+    }
+    
+    // uiManager 会在选关后调用这个方法
+    public void StartTutorialStage(int stage)
+    {
+        if (PlayerData == null) return;
+        
+        // 如果是从选关界面进来的，需要先备份数据
+        if (!PlayerData.IsInTutorial)
+        {
+            PlayerData.SavedTutorialDeck = new List<string>(PlayerData.Deck);
+            PlayerData.IsInTutorial = true;
+        }
+        PlayerData.TutorialStage = stage;
+        
+        // 重置玩家血量到满血（为“再试一次”准备）
+        PlayerData.CurrentHealth = PlayerData.MaxHealth;
+        EventBus.Instance?.EmitStatUpdated(GameEnums.PlayerStatType.Health, PlayerData.CurrentHealth);
+        
+        // 强制替换为特定关卡的组件
+        if (stage == 1)
+        {
+            PlayerData.Deck = new List<string>
+            {
+                "card_hourglass",       // 时光沙漏
+                "card_hoe_combo"        // 锄头连击
+            };
+            EventBus.Instance?.EmitNotificationRequested("教程阶段 1: 时停无限流！");
+        }
+        else if (stage == 2)
+        {
+            PlayerData.Deck = new List<string>
+            {
+                "card_devil_pact",      // 恶魔契约
+                "card_purify",          // 净化
+                "card_motivation",      // 干劲
+                "card_hoe_combo"        // 锄头连击
+            };
+            EventBus.Instance?.EmitNotificationRequested("教程阶段 2: 血魔法无限流！");
+        }
+        
+        // 这里必须给个极其微小的延迟或者确保之前回合已经完全结束，防止刚换状态就打架导致UI不同步
+        // 触发战斗(跳过战前准备界面)
+        EventBus.Instance?.EmitCombatStarted("enemy_tutorial_dummy");
+        ChangeState(GameEnums.GameState.Combat);
+    }
+
+    public void ExitTutorial()
+    {
+        if (PlayerData == null) return;
+        
+        // 还原数据
+        if (PlayerData.SavedTutorialDeck != null && PlayerData.SavedTutorialDeck.Count > 0)
+        {
+            PlayerData.Deck = new List<string>(PlayerData.SavedTutorialDeck);
+        }
+        PlayerData.IsInTutorial = false;
+        PlayerData.TutorialStage = 0;
+        
+        ChangeState(GameEnums.GameState.Farming);
+        EventBus.Instance?.EmitNotificationRequested("已恢复卡组数据");
     }
 }

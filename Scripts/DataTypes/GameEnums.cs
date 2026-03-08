@@ -7,6 +7,7 @@ public static class GameEnums
     {
         MainMenu,
         MapExploration,
+        PreCombat,
         Combat,
         Farming,
         RewardSelection,

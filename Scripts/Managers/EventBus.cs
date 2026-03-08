@@ -26,6 +26,13 @@ public partial class EventBus : Node
 	public event Action<string> BossDefeated; // enemyId
 	public event Action<bool> CombatEnded; // playerWon
 	
+	// 战斗前事件
+	public event Action<string, bool> PreCombatRequested; // enemyId, isBoss
+	public event Action<string, List<string>> CombatCardSelected; // enemyId, selectedCards
+	
+    // 教程失败事件
+    public event Action TutorialFailedEvent;
+
 	// 农场事件
 	public event Action<string, int> CropPlanted; // cropId, plotIndex
 	public event Action<string, int, float> CropGrowthUpdated; // cropId, plotIndex, progress
@@ -115,6 +122,21 @@ public partial class EventBus : Node
 		BossDefeated?.Invoke(enemyId);
 	}
 	
+	public void EmitPreCombatRequested(string enemyId, bool isBoss)
+	{
+		PreCombatRequested?.Invoke(enemyId, isBoss);
+	}
+	
+	public void EmitCombatCardSelected(string enemyId, List<string> selectedCards)
+    {
+        CombatCardSelected?.Invoke(enemyId, selectedCards);
+    }
+    
+    public void EmitTutorialFailedEvent()
+    {
+        TutorialFailedEvent?.Invoke();
+    }
+
 	public void EmitCropPlanted(string cropId, int plotIndex)
 	{
 		CropPlanted?.Invoke(cropId, plotIndex);

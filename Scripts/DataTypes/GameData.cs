@@ -16,6 +16,13 @@ public class PlayerData
     public float Luck { get; set; } = 1.0f; // 幸运值影响掉落等
     public int Gold { get; set; } = 50; // 初始金币数量
     public List<string> Deck { get; set; } = new(); // 卡组中的卡牌ID列表
+    public List<string> CurrentCombatDeck { get; set; } = new(); // 单次战斗选择的卡牌列表
+
+    // 教程专属字段
+    public bool IsInTutorial { get; set; } = false;
+    public int TutorialStage { get; set; } = 0; // 记录教程进行到了哪一关
+    public bool HasClearedTutorialStage1 { get; set; } = false; // 是否已通关第一关，用于解锁第二关
+    public List<string> SavedTutorialDeck { get; set; } = new List<string>();
     public List<string> UnlockedCards { get; set; } = new(); // 已解锁卡牌ID列表
     public List<string> UnlockedCrops { get; set; } = new(); // 已解锁作物ID列表
     public List<string> EquippedCards { get; set; } = new();  // 当前装备的卡牌ID列表
