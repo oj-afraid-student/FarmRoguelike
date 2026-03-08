@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://p7amrongni3s" path="res://Scripts/UI/EnderChestUIController.cs" id="1_aajih"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_aajih"]
-bg_color = Color(0, 0, 0, 0.5882353)
+bg_color = Color(0, 0, 0, 1)
 
 [node name="EnderChestUI" type="Control" unique_id=992684573 node_paths=PackedStringArray("_cropsContainer", "_titleLabel", "_descriptionLabel", "_closeButton", "_playerGoldLabel", "_playerHealthLabel")]
 layout_mode = 3

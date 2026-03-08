@@ -2588,6 +2588,83 @@ public partial class UIManager : Control
 	{
 		// 保持接口以兼容事件回调；楼层推进已自动化。
 		_pendingBossDefeatedEnemyId = null;
+		
+		ShowFloorStatisticsUI();
+	}
+	
+	private void ShowFloorStatisticsUI()
+	{
+		if (_gameManager == null) return;
+		
+		var popupRoot = new Control();
+		popupRoot.Name = "FloorStatisticsUI";
+		popupRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		
+		var panel = new ColorRect();
+		panel.Color = new Color(0, 0, 0, 1f); // 纯黑不透明背景
+		panel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		popupRoot.AddChild(panel);
+		
+		var centerContainer = new CenterContainer();
+		centerContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		popupRoot.AddChild(centerContainer);
+		
+		var vbox = new VBoxContainer();
+		vbox.Alignment = BoxContainer.AlignmentMode.Center;
+		vbox.AddThemeConstantOverride("separation", 24);
+		centerContainer.AddChild(vbox);
+		
+		var titleLabel = new Label();
+		// 因为 OnFloorCompleted 已经提前使 CurrentFloor += 1，这里显示 CurrentFloor - 1 作为刚完成的层数
+		int floorNum = Math.Max(1, _gameManager.CurrentFloor - 1);
+		titleLabel.Text = $"第 {floorNum} 层 统计数据";
+		titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		titleLabel.AddThemeFontSizeOverride("font_size", 36);
+		vbox.AddChild(titleLabel);
+		
+		// 金币获取
+		var goldLabel = new Label();
+		goldLabel.Text = $"获得的金币：{_gameManager.CurrentFloorGoldObtained}";
+		goldLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		goldLabel.AddThemeFontSizeOverride("font_size", 24);
+		vbox.AddChild(goldLabel);
+		
+		// 造成伤害
+		var damageLabel = new Label();
+		damageLabel.Text = $"造成的伤害：{_gameManager.CurrentFloorDamageDealt}";
+		damageLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		damageLabel.AddThemeFontSizeOverride("font_size", 24);
+		vbox.AddChild(damageLabel);
+		
+		// 花费时间 (格式化 mm:ss)
+		var timeLabel = new Label();
+		TimeSpan t = TimeSpan.FromSeconds(_gameManager.CurrentFloorTime);
+		timeLabel.Text = string.Format("花费的时间：{0:D2}:{1:D2}", t.Minutes, t.Seconds);
+		timeLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		timeLabel.AddThemeFontSizeOverride("font_size", 24);
+		vbox.AddChild(timeLabel);
+		
+		var confirmButton = new Button();
+		confirmButton.Text = "确认并进入下一层";
+		confirmButton.CustomMinimumSize = new Vector2(240, 60);
+		confirmButton.AddThemeFontSizeOverride("font_size", 24);
+		confirmButton.Pressed += () => {
+			_gameManager.ProceedToNextFloor();
+			popupRoot.QueueFree();
+		};
+		
+		var buttonBox = new CenterContainer();
+		buttonBox.AddChild(confirmButton);
+		vbox.AddChild(buttonBox);
+		
+		if (_uiLayer != null)
+		{
+			_uiLayer.AddChild(popupRoot);
+		}
+		else
+		{
+			AddChild(popupRoot);
+		}
 	}
 
 	private void ShowBossDefeatedDialog(string enemyId)

@@ -12,6 +12,35 @@ public partial class GameManager : Node
     public int CurrentFloor { get; private set; } = 1;
     public bool IsPaused { get; private set; } = false;
     
+    // 楼层统计
+    public float CurrentFloorTime { get; private set; } = 0f;
+    public int CurrentFloorDamageDealt { get; private set; } = 0;
+    public int CurrentFloorGoldObtained { get; private set; } = 0;
+
+    public void AddFloorGold(int amount)
+    {
+        if (amount > 0)
+        {
+            CurrentFloorGoldObtained += amount;
+        }
+    }
+
+    public void ResetFloorStatistics()
+    {
+        CurrentFloorTime = 0f;
+        CurrentFloorDamageDealt = 0;
+        CurrentFloorGoldObtained = 0;
+    }
+
+    public override void _Process(double delta)
+    {
+        base._Process(delta);
+        if (CurrentState != GameEnums.GameState.MainMenu && CurrentState != GameEnums.GameState.GameOver && !IsPaused)
+        {
+            CurrentFloorTime += (float)delta;
+        }
+    }
+    
     /// <summary>
     /// 设置当前层数（用于加载存档）
     /// </summary>
@@ -126,6 +155,7 @@ public partial class GameManager : Node
         if (eventBus == null) return;
         
         eventBus.PlayerDamaged += OnPlayerDamaged;
+        eventBus.EnemyDamaged += OnEnemyDamaged;
         eventBus.EnemyDefeated += OnEnemyDefeated;
         eventBus.CombatEnded += OnCombatEnded;
         eventBus.CropHarvested += OnCropHarvested;
@@ -144,6 +174,7 @@ public partial class GameManager : Node
         // 标准新游戏流程：初始化数据、生成地图并进入地图探索
         InitializePlayerData();
         CurrentFloor = 1;
+        ResetFloorStatistics();
         GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
         ChangeState(GameEnums.GameState.MapExploration);
         EventBus.Instance.EmitGameStarted();
@@ -296,6 +327,7 @@ public partial class GameManager : Node
             case GameEnums.RoomType.Reward:
                 int goldReward = 20;
                 PlayerData.Gold += goldReward;
+                AddFloorGold(goldReward);
                 string rewardMsg = $"[系统] 你发现了一个宝箱！获得了 {goldReward} 金币。当前金币: {PlayerData.Gold}";
                 GD.Print(rewardMsg);
                 EventBus.Instance?.EmitNotificationRequested(rewardMsg);
@@ -373,6 +405,11 @@ public partial class GameManager : Node
         GD.Print($"玩家受到 {damage} 点伤害，剩余生命: {PlayerData.CurrentHealth}");
     }
     
+    private void OnEnemyDamaged(string enemyId, int damage)
+    {
+        CurrentFloorDamageDealt += damage;
+    }
+    
     private void OnEnemyDefeated(string enemyId)
     {
         // 战斗系统已经负责发放奖励（读取怪物配置和给予金币/经验），这里可以处理后续流程
@@ -434,10 +471,16 @@ public partial class GameManager : Node
         }
 
         CurrentFloor = floorNumber + 1;
-        string nextFloorMsg = $"[系统] 击败Boss，进入第 {CurrentFloor} 层。";
+        string nextFloorMsg = $"[系统] 击败Boss，即将进入第 {CurrentFloor} 层。";
         GD.Print(nextFloorMsg);
         EventBus.Instance?.EmitNotificationRequested(nextFloorMsg);
+        
+        // 注：实际的地图生成和状态跳转推迟到玩家关闭结算面板后
+    }
 
+    public void ProceedToNextFloor()
+    {
+        ResetFloorStatistics();
         GameRoot.Instance?.MapSystem?.GenerateFloor(CurrentFloor);
         EventBus.Instance?.EmitMapVisualsUpdateRequested();
 
@@ -487,6 +530,7 @@ public partial class GameManager : Node
                 break;
             case GameEnums.RewardType.GoldReward:
                 PlayerData.Gold += (int)reward.Value;
+                AddFloorGold((int)reward.Value);
                 break;
         }
     }
@@ -524,6 +568,7 @@ public partial class GameManager : Node
         if (reward.Gold > 0)
         {
             PlayerData.Gold += reward.Gold;
+            AddFloorGold(reward.Gold);
         }
         
         if (reward.StatModifiers != null)

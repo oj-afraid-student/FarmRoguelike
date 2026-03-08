@@ -608,6 +608,9 @@ public partial class CombatSystem : Node2D
 
 		ApplyLifestealIfAny(actualDamage);
 		
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, actualDamage);
+		GD.Print($"对敌人造成 {actualDamage} 点伤害（包含护甲减免），敌人预期生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+
 		if (_currentEnemyHealth <= 0)
 		{
 			_currentEnemyHealth = 0;
@@ -615,9 +618,6 @@ public partial class CombatSystem : Node2D
 		}
 
 		TryApplyOverlordEvolution();
-		
-		_eventBus.EmitEnemyDamaged(_currentEnemyId, actualDamage);
-		GD.Print($"对敌人造成 {actualDamage} 点伤害（包含护甲减免），敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
 	}
 
 	private void ApplyBurnDamageToEnemy(int stacks)
@@ -631,14 +631,14 @@ public partial class CombatSystem : Node2D
 		
 		_currentEnemyHealth -= burnDamage;
 		
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, burnDamage);
+		GD.Print($"燃烧对敌人造成 {burnDamage} 点真实伤害，敌人预期生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+
 		if (_currentEnemyHealth <= 0)
 		{
 			_currentEnemyHealth = 0;
 			EnemyDefeated();
 		}
-		
-		_eventBus.EmitEnemyDamaged(_currentEnemyId, burnDamage);
-		GD.Print($"燃烧对敌人造成 {burnDamage} 点真实伤害，敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
 	}
 	
 	// This method was missing from the provided context, adding it based on the instruction's implied structure.
@@ -681,14 +681,14 @@ public partial class CombatSystem : Node2D
 		
 		_currentEnemyHealth -= damage;
 		
+		_eventBus.EmitEnemyDamaged(_currentEnemyId, damage);
+		GD.Print($"毒素对敌人造成 {damage} 点真实伤害，敌人预期生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
+
 		if (_currentEnemyHealth <= 0)
 		{
 			_currentEnemyHealth = 0;
 			EnemyDefeated();
 		}
-		
-		_eventBus.EmitEnemyDamaged(_currentEnemyId, damage);
-		GD.Print($"毒素对敌人造成 {damage} 点真实伤害，敌人剩余生命: {_currentEnemyHealth}/{_currentEnemyMaxHealth}");
 	}
 	
 	private void EnemyDefeated()
