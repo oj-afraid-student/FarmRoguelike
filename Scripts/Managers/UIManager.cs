@@ -2690,35 +2690,168 @@ public partial class UIManager : Control
 	{
 		ShowNotification($"受到 {damage} 点伤害!");
 		UpdatePlayerStats();
-		
-		// 伤害数字效果
-		if (IsInstanceValid(_playerHealthLabel) && _playerHealthLabel.IsInsideTree())
+
+		if (damage <= 0) return;
+
+		// 播放敌方卡牌飞出撞击动画，撞击后再震动+红字
+		if (IsInstanceValid(_currentCombatUI))
 		{
-			ShowDamageEffect(damage, _playerHealthLabel.GlobalPosition, false);
+			PlayEnemyAttackAnimation(damage);
 		}
 		else
 		{
-			// 如果没有找到玩家血量标签，默认显示在屏幕中央
+			// 无战斗UI时直接显示效果
 			var viewportSize = GetViewport().GetVisibleRect().Size;
-			ShowDamageEffect(damage, viewportSize / 2, false);
+			ShowPlayerDamageNumber(damage, viewportSize / 2);
+			ShakeScreen(8f, 0.3f);
 		}
+	}
+
+	/// <summary>
+	/// 敌方攻击动画：一个卡牌形小块从 EnemyFrame 飞向 PlayerFrame，
+	/// 撞击时震动屏幕并在玩家位置冰出红色伤害数字。
+	/// </summary>
+	private void PlayEnemyAttackAnimation(int damage)
+	{
+		Control enemyAnchor = _currentCombatUI.FindChild("EnemyFrame", true, false) as Control
+			?? _currentCombatUI.FindChild("EnemyPortrait", true, false) as Control;
+		Control playerAnchor = _currentCombatUI.FindChild("PlayerFrame", true, false) as Control
+			?? _currentCombatUI.FindChild("PlayerAvatar", true, false) as Control;
+
+		// 将敞人原地贴图临时隐藏，使其看起来像“飞出去”
+		var portraitNode = _currentCombatUI.FindChild("EnemyPortrait", true, false) as Control;
+		if (portraitNode != null) portraitNode.Visible = false;
+
+		Vector2 startPos = enemyAnchor != null
+			? enemyAnchor.GlobalPosition + enemyAnchor.Size * 0.5f
+			: GetViewport().GetVisibleRect().Size * new Vector2(0.75f, 0.5f);
+		// 撞击目标定在 PlayerFrame 中间偏上（Y offset 0.28）以对齐角色上半身
+		Vector2 endPos = playerAnchor != null
+			? playerAnchor.GlobalPosition + playerAnchor.Size * new Vector2(0.5f, 0.28f)
+			: GetViewport().GetVisibleRect().Size * new Vector2(0.25f, 0.4f);
+
+		// 用敌人真实贴图创建飞行节点
+		const float SpriteSize = 80f;
+		Control projectile;
+
+		var enemyId = GameRoot.Instance?.CombatSystem?.CurrentEnemyId ?? "";
+		var enemyTex = ResolveEnemyPortraitTexture(enemyId);
+
+		if (enemyTex != null)
+		{
+			var texRect = new TextureRect();
+			texRect.Texture = enemyTex;
+			texRect.StretchMode = TextureRect.StretchModeEnum.KeepAspect;
+			texRect.CustomMinimumSize = new Vector2(SpriteSize, SpriteSize);
+			texRect.Size = new Vector2(SpriteSize, SpriteSize);
+			texRect.ZIndex = 200;
+			texRect.MouseFilter = Control.MouseFilterEnum.Ignore;
+			projectile = texRect;
+		}
+		else
+		{
+			var fallback = new Panel();
+			fallback.CustomMinimumSize = new Vector2(SpriteSize, SpriteSize);
+			fallback.Size = new Vector2(SpriteSize, SpriteSize);
+			fallback.ZIndex = 200;
+			var fallStyle = new StyleBoxFlat();
+			fallStyle.BgColor = new Color(1f, 1f, 1f, 0.7f);
+			fallStyle.SetCornerRadiusAll(8);
+			fallback.AddThemeStyleboxOverride("panel", fallStyle);
+			projectile = fallback;
+		}
+
+		_uiLayer.AddChild(projectile);
+		projectile.PivotOffset = new Vector2(SpriteSize / 2, SpriteSize / 2);
+		projectile.GlobalPosition = startPos - new Vector2(SpriteSize / 2, SpriteSize / 2);
+
+		// 朝向玩家方向倾斜（冒冲感）
+		Vector2 dir = (endPos - startPos).Normalized();
+		projectile.Rotation = Mathf.Atan2(dir.Y, dir.X) - Mathf.Pi / 2f;
+
+		const float FlightTime = 0.22f;
+		var tween = CreateTween();
+		var targetPos = endPos - new Vector2(SpriteSize / 2, SpriteSize / 2);
+
+		tween.SetParallel(true);
+		tween.TweenProperty(projectile, "global_position", targetPos, FlightTime)
+			.SetEase(Tween.EaseType.In)
+			.SetTrans(Tween.TransitionType.Quad);
+		tween.TweenProperty(projectile, "scale", new Vector2(1.25f, 1.25f), FlightTime * 0.8f)
+			.SetEase(Tween.EaseType.Out);
+		tween.SetParallel(false);
+
+		// 撞击时：屏幕震动 + 玩家红色伤害数字
+		tween.TweenCallback(Callable.From(() =>
+		{
+			ShakeScreen(10f, 0.3f);
+			ShowPlayerDamageNumber(damage, endPos);
+		}));
+
+		// 撞击后贴图快速缩小消失，同时恢复原地敌人贴图
+		tween.SetParallel(true);
+		tween.TweenProperty(projectile, "scale", new Vector2(0.1f, 0.1f), 0.1f)
+			.SetEase(Tween.EaseType.In);
+		tween.TweenProperty(projectile, "modulate:a", 0f, 0.1f);
+		tween.SetParallel(false);
+		tween.TweenCallback(Callable.From(() =>
+		{
+			projectile.QueueFree();
+			if (IsInstanceValid(portraitNode)) portraitNode.Visible = true;
+		}));
+	}
+
+	/// <summary>
+	/// 在玩家位置显示红色伤害数字。
+	/// </summary>
+	private void ShowPlayerDamageNumber(int damage, Vector2 worldPos)
+	{
+		var rng = new RandomNumberGenerator();
+		rng.Randomize();
+		float xOffset = rng.RandiRange(-30, 30);
+
+		var lbl = new Label();
+		lbl.Text = $"-{damage}";
+		lbl.AddThemeFontSizeOverride("font_size", 40);
+		lbl.AddThemeColorOverride("font_color", new Color(1f, 0.1f, 0.05f));
+		lbl.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f));
+		lbl.AddThemeConstantOverride("outline_size", 5);
+		lbl.ZIndex = 200;
+		_uiLayer.AddChild(lbl);
+		lbl.GlobalPosition = worldPos + new Vector2(xOffset, -20);
+
+		var tween = CreateTween();
+		tween.SetParallel(true);
+		tween.TweenProperty(lbl, "position:y", lbl.Position.Y - 90f, 0.75f)
+			.SetEase(Tween.EaseType.Out)
+			.SetTrans(Tween.TransitionType.Cubic);
+		tween.TweenProperty(lbl, "modulate:a", 0f, 0.75f)
+			.SetDelay(0.3f)
+			.SetEase(Tween.EaseType.In);
+		tween.SetParallel(false);
+		tween.TweenCallback(Callable.From(() => lbl.QueueFree()));
 	}
 
 	private void OnEnemyDamaged(string enemyId, int damage)
 	{
+		if (damage <= 0) return;
+
 		ShowNotification($"对敌人造成 {damage} 点伤害");
-		
-		// 伤害数字效果
-		if (_currentCombatUI != null)
+
+		// 伤害数字效果 + 屏幕震动
+		if (IsInstanceValid(_currentCombatUI))
 		{
-			var enemyInfo = _currentCombatUI.FindChild("EnemyInfo", true, false) as Label;
-			if (enemyInfo != null)
-			{
-				ShowDamageEffect(damage, enemyInfo.GlobalPosition, true);
-				
-				// 直接通过通用方法更新战斗信息UI，包含血量和附加状态字样显示
-				UpdateCombatEnemyInfo(enemyId);
-			}
+			// 优先用 EnemyFrame 的中心点作为浮字锚点
+			Control anchor = _currentCombatUI.FindChild("EnemyFrame", true, false) as Control
+				?? _currentCombatUI.FindChild("EnemyInfo", true, false) as Control;
+			Vector2 spawnPos = anchor != null
+				? anchor.GlobalPosition + anchor.Size / 2
+				: GetViewport().GetVisibleRect().Size / 2;
+
+			ShowEnemyDamageNumber(damage, spawnPos);
+			ShakeScreen(6f, 0.25f);
+
+			UpdateCombatEnemyInfo(enemyId);
 		}
 	}
 
@@ -3491,6 +3624,62 @@ public partial class UIManager : Control
 		tween.TweenProperty(damageLabel, "position:y", position.Y - 50, 0.5);
 		tween.Parallel().TweenProperty(damageLabel, "modulate:a", 0, 0.5);
 		tween.TweenCallback(Callable.From(() => damageLabel.QueueFree()));
+	}
+
+	/// <summary>
+	/// 在指定位置显示敌人受伤的红色浮动数字。
+	/// </summary>
+	private void ShowEnemyDamageNumber(int damage, Vector2 worldPos)
+	{
+		var rng = new RandomNumberGenerator();
+		rng.Randomize();
+		float xOffset = rng.RandiRange(-30, 30);
+
+		var lbl = new Label();
+		lbl.Text = $"-{damage}";
+		lbl.AddThemeFontSizeOverride("font_size", 36);
+		lbl.AddThemeColorOverride("font_color", new Color(1f, 0.15f, 0.1f));
+		lbl.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f));
+		lbl.AddThemeConstantOverride("outline_size", 4);
+		lbl.ZIndex = 100;
+		_uiLayer.AddChild(lbl);
+		lbl.GlobalPosition = worldPos + new Vector2(xOffset, -20);
+
+		var tween = CreateTween();
+		tween.SetParallel(true);
+		tween.TweenProperty(lbl, "position:y", lbl.Position.Y - 80f, 0.7f)
+			.SetEase(Tween.EaseType.Out)
+			.SetTrans(Tween.TransitionType.Cubic);
+		tween.TweenProperty(lbl, "modulate:a", 0f, 0.7f)
+			.SetDelay(0.3f)
+			.SetEase(Tween.EaseType.In);
+		tween.SetParallel(false);
+		tween.TweenCallback(Callable.From(() => lbl.QueueFree()));
+	}
+
+	/// <summary>
+	/// 屏幕震动：抖动 _uiLayer 位置后归零。
+	/// </summary>
+	private void ShakeScreen(float intensity, float duration)
+	{
+		var rng = new RandomNumberGenerator();
+		rng.Randomize();
+		var tween = CreateTween();
+
+		int steps = Mathf.Max(4, (int)(duration / 0.04f));
+		float stepTime = duration / steps;
+
+		for (int i = 0; i < steps; i++)
+		{
+			float decayFactor = 1f - (float)i / steps;
+			float dx = rng.RandfRange(-intensity, intensity) * decayFactor;
+			float dy = rng.RandfRange(-intensity, intensity) * decayFactor;
+			tween.TweenProperty(_uiLayer, "offset", new Vector2(dx, dy), stepTime)
+				.SetEase(Tween.EaseType.Out)
+				.SetTrans(Tween.TransitionType.Sine);
+		}
+		// 归零
+		tween.TweenProperty(_uiLayer, "offset", Vector2.Zero, stepTime * 0.5f);
 	}
 
 	private Texture2D TryLoadTexture(string path)
