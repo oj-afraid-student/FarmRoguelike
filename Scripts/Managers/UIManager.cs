@@ -2629,6 +2629,20 @@ public partial class UIManager : Control
 		goldLabel.AddThemeFontSizeOverride("font_size", 24);
 		vbox.AddChild(goldLabel);
 		
+		// 击杀敌人
+		var killsLabel = new Label();
+		killsLabel.Text = $"击杀的敌人：{_gameManager.CurrentFloorEnemiesKilled}";
+		killsLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		killsLabel.AddThemeFontSizeOverride("font_size", 24);
+		vbox.AddChild(killsLabel);
+		
+		// 经过陷阱
+		var trapsLabel = new Label();
+		trapsLabel.Text = $"踩中的陷阱：{_gameManager.CurrentFloorTrapsVisited}";
+		trapsLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		trapsLabel.AddThemeFontSizeOverride("font_size", 24);
+		vbox.AddChild(trapsLabel);
+		
 		// 造成伤害
 		var damageLabel = new Label();
 		damageLabel.Text = $"造成的伤害：{_gameManager.CurrentFloorDamageDealt}";

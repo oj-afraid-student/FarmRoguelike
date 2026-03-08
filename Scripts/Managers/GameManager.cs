@@ -16,6 +16,8 @@ public partial class GameManager : Node
     public float CurrentFloorTime { get; private set; } = 0f;
     public int CurrentFloorDamageDealt { get; private set; } = 0;
     public int CurrentFloorGoldObtained { get; private set; } = 0;
+    public int CurrentFloorEnemiesKilled { get; private set; } = 0;
+    public int CurrentFloorTrapsVisited { get; private set; } = 0;
 
     public void AddFloorGold(int amount)
     {
@@ -30,6 +32,8 @@ public partial class GameManager : Node
         CurrentFloorTime = 0f;
         CurrentFloorDamageDealt = 0;
         CurrentFloorGoldObtained = 0;
+        CurrentFloorEnemiesKilled = 0;
+        CurrentFloorTrapsVisited = 0;
     }
 
     public override void _Process(double delta)
@@ -339,6 +343,7 @@ public partial class GameManager : Node
                 break;
                 
             case GameEnums.RoomType.Trap:
+                CurrentFloorTrapsVisited++;
                 int damage = 10;
                 int goldLoss = 5;
                 
@@ -412,6 +417,7 @@ public partial class GameManager : Node
     
     private void OnEnemyDefeated(string enemyId)
     {
+        CurrentFloorEnemiesKilled++;
         // 战斗系统已经负责发放奖励（读取怪物配置和给予金币/经验），这里可以处理后续流程
         GD.Print($"GameManager 检测到击败敌人 {enemyId}");
 
