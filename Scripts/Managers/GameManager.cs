@@ -1032,7 +1032,7 @@ public partial class GameManager : Node
             PlayerData.Deck = new List<string>
             {
                 "card_hourglass",       // 时光沙漏
-                "card_hoe_combo"        // 锄头连击
+                "card_scythe_slash"     // 镰刀挥砍
             };
             EventBus.Instance?.EmitNotificationRequested("教程阶段 1: 时停无限流！");
         }
